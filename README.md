@@ -6,6 +6,11 @@ left and a mountain on the right.
 
 **See it:** https://vinceatworkingsoftware.github.io/road-not-taken-stereogram/
 
+**Build your own:** https://vinceatworkingsoftware.github.io/road-not-taken-stereogram/builder/  
+Pick one of five poems or paste your own text, choose a hidden picture (or type a word),
+and adjust colours, letter size, depth and viewing method. It also has a full-screen and a
+picture-only mode.
+
 ## How to see the picture
 
 1. Move your face close to the screen, so everything is blurry.
@@ -19,6 +24,13 @@ letter. Where the hidden scene stands out, the repeat is a few letters shorter. 
 lines up a different copy, and the brain reads the shorter repeat as nearer. The first
 repeat on the left is kept flat, so the poem always reads cleanly down the left edge.
 
-Everything is in [`index.html`](index.html): plain HTML and JavaScript, no build step.
+Plain HTML and JavaScript, no build step: [`index.html`](index.html) is the picture,
+[`builder/index.html`](builder/index.html) the builder.
 
-The poem was published in 1916 and is in the public domain.
+## The poems
+
+Robert Frost's *The Road Not Taken* (1916) and *Stopping by Woods on a Snowy Evening* (1923) are in
+the public domain in the United States. Frost died in 1963, so in countries that protect works for
+70 years after the author's death and do not shorten that for American works (Germany among them)
+they may stay protected until the end of 2033. William Blake's *The Tyger*, William Wordsworth's
+*I Wandered Lonely as a Cloud* and Shakespeare's *Sonnet 18* are in the public domain everywhere.

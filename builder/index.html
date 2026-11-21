@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Build your own stereogram from a poem or any text: pick a hidden picture, relax your eyes, and it appears in 3D.">
+<title>Letter Stereogram</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=Literata:ital,wght@0,400;1,400&display=swap">
+<style>
+/* Page basics */
+:root{color-scheme:light}
+body{margin:0}
+[hidden]{display:none!important}
+.links{margin:2px 0 0; font-size:14px}
+.links a{color:var(--accent)}
+/* Layout: one centred column. The letter field is the hero; controls sit on its top edge, the how-to follows below. */
+:root{
+  --bg:#e9ecf1; --panel:#fbfcfd; --fg:#181c24; --muted:#586072; --line:#d3d8e0;
+  --accent:#2f54d6; --accent-ink:#ffffff; --hit:rgba(47,84,214,.22); --dot:#181c24;
+  --c0:#b4232f; --c1:#1d6f42; --c2:#2f54d6; --c3:#a0520c; --c4:#7a2bb3; --c5:#0e7488; --c6:#3a3f4b; --c7:#b0246d;
+  --t0:#f6d84a; --t1:#a3e39c; --t2:#9fcaf6; --t3:#f8aecb; --t4:#b8322a; --t5:#1d6a86; --t6:#5a3a9c; --t7:#2c6a30;
+  --ink-dark:18 21 27; --ink-light:255 255 255;
+  --display:"Space Grotesk",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --verse:"Literata",Georgia,"Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10131a; --panel:#171b23; --fg:#e4e8ef; --muted:#97a0b0; --line:#2a303b;
+    --accent:#86a0ff; --accent-ink:#0d1220; --hit:rgba(134,160,255,.25); --dot:#e4e8ef;
+    --c0:#ff8a92; --c1:#6fd79b; --c2:#8fa8ff; --c3:#f2b067; --c4:#cf9bff; --c5:#5fd3e6; --c6:#c3c9d4; --c7:#ff8cc6;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10131a; --panel:#171b23; --fg:#e4e8ef; --muted:#97a0b0; --line:#2a303b;
+  --accent:#86a0ff; --accent-ink:#0d1220; --hit:rgba(134,160,255,.25); --dot:#e4e8ef;
+  --c0:#ff8a92; --c1:#6fd79b; --c2:#8fa8ff; --c3:#f2b067; --c4:#cf9bff; --c5:#5fd3e6; --c6:#c3c9d4; --c7:#ff8cc6;
+  color-scheme:dark;
+}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--body); font-size:15px; line-height:1.55;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:28px 48px;
+}
+.wrap{max-width:1180px; margin:0 auto; display:grid; gap:20px}
+header{display:grid; gap:6px}
+h1{font-family:var(--display); font-weight:700; font-size:clamp(26px,4vw,38px); line-height:1.1; margin:0; letter-spacing:-.01em; text-wrap:balance}
+header p{margin:0; color:var(--muted); max-width:66ch}
+
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.panel.full{
+  position:fixed; inset:0; z-index:50; border:0; border-radius:0; overflow:auto;
+  padding-top:env(safe-area-inset-top, 0px); padding-bottom:env(safe-area-inset-bottom, 0px);
+  padding-left:env(safe-area-inset-left, 0px); padding-right:env(safe-area-inset-right, 0px);
+}
+body.has-full{overflow:hidden}
+.panel.bare{display:flex; flex-direction:column}
+.panel.bare .controls,.panel.bare .reading,.panel.bare .hint{display:none}
+.panel.bare .stage{margin-block:auto; width:100%; box-sizing:border-box}
+.exit-bare{
+  position:fixed; z-index:60; opacity:.6;
+  top:calc(12px + env(safe-area-inset-top, 0px)); right:calc(12px + env(safe-area-inset-right, 0px));
+}
+.exit-bare:hover,.exit-bare:focus-visible{opacity:1}
+.controls{display:flex; flex-wrap:wrap; gap:14px 22px; align-items:end; padding:14px 16px; border-bottom:1px solid var(--line)}
+.field{display:grid; gap:5px; min-width:0}
+.label{font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--muted)}
+select,input[type=text]{
+  font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:6px;
+  padding:6px 10px; height:34px; max-width:100%;
+}
+select:disabled{opacity:.5}
+input[type=text]{width:9.5em; text-transform:uppercase; font-family:var(--mono)}
+textarea{
+  font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:6px;
+  padding:8px 10px; width:100%; min-height:110px; resize:vertical; box-sizing:border-box;
+}
+#textField{flex:1 1 100%}
+input[type=range]{width:120px; accent-color:var(--accent); height:34px; margin:0}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; height:34px}
+.seg button,.btn{
+  font:inherit; font-size:14px; font-weight:500; color:var(--fg); background:var(--bg); border:0; padding:0 12px; cursor:pointer; height:34px;
+}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink)}
+.btn{border:1px solid var(--line); border-radius:6px}
+.btn[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.spacer{flex:1 1 0}
+
+.stage{overflow-x:auto; padding:22px 16px 26px}
+.field-inner{margin:0 auto; width:max-content}
+.guides{position:relative; height:26px; margin-bottom:10px}
+.guides span{position:absolute; top:4px; width:16px; height:16px; border-radius:50%; background:var(--dot)}
+.reading{border-top:1px solid var(--line); padding:24px 16px 32px}
+.reading-inner{max-width:34rem; margin:0 auto}
+.reading h2{margin:0 0 2px; font-size:22px}
+.reading .by{margin:0 0 16px; color:var(--muted); font-size:13px; letter-spacing:.02em}
+.verse{margin:0; font-family:var(--verse); font-size:18px; line-height:1.7; white-space:pre-line}
+.hint{margin:12px 0 0; color:var(--muted); font-size:13px; text-align:center}
+pre#grid{margin:0; font-family:var(--mono); font-weight:600; line-height:1.25; color:var(--fg); user-select:none}
+.look-colour #grid .g0{color:var(--c0)} .look-colour #grid .g1{color:var(--c1)} .look-colour #grid .g2{color:var(--c2)} .look-colour #grid .g3{color:var(--c3)}
+.look-colour #grid .g4{color:var(--c4)} .look-colour #grid .g5{color:var(--c5)} .look-colour #grid .g6{color:var(--c6)} .look-colour #grid .g7{color:var(--c7)}
+.look-tiles pre#grid{line-height:1.12; font-weight:700; color:rgb(var(--ink-dark) / var(--ink-a, 1))}
+.look-tiles #grid .g0{background:var(--t0)} .look-tiles #grid .g1{background:var(--t1)} .look-tiles #grid .g2{background:var(--t2)} .look-tiles #grid .g3{background:var(--t3)}
+.look-tiles #grid .g4{background:var(--t4)} .look-tiles #grid .g5{background:var(--t5)} .look-tiles #grid .g6{background:var(--t6)} .look-tiles #grid .g7{background:var(--t7)}
+.look-tiles #grid .g4,.look-tiles #grid .g5,.look-tiles #grid .g6,.look-tiles #grid .g7{color:rgb(var(--ink-light) / var(--ink-a, 1))}
+/* Quieter tile sets keep the same spread from light to dark, which is what the eyes match on. */
+.pal-quiet{--t0:#ece7dc; --t1:#d3d9cc; --t2:#bcc6cf; --t3:#cbb9a8; --t4:#7d6f61; --t5:#5d6b62; --t6:#4b5866; --t7:#33302c;
+  --ink-dark:27 29 32; --ink-light:243 239 231}
+.pal-mono{--t0:#f2f2ef; --t1:#dcdcd8; --t2:#c4c4bf; --t3:#adada8; --t4:#7b7b77; --t5:#636360; --t6:#4b4b48; --t7:#2f2f2d;
+  --ink-dark:24 24 24; --ink-light:245 245 242}
+#grid .h{background:var(--hit)}
+.look-tiles #grid .h{background:var(--fg); color:var(--bg)}
+
+.howto{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px 32px}
+.howto section{min-width:0}
+h2{font-family:var(--display); font-weight:700; font-size:19px; margin:0 0 8px}
+ol{margin:0; padding-left:1.3em; display:grid; gap:6px}
+.howto ul{margin:0; padding-left:1.1em; display:grid; gap:4px; color:var(--muted)}
+.probe{position:absolute; visibility:hidden; white-space:pre; font-family:var(--mono); font-weight:600}
+@media (max-width:520px){ .spacer{display:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Letter Stereogram</h1>
+    <p>A poem with a shape hidden in it. Each line of the poem repeats across its row, together with the coloured tiles behind it. Where the shape sits, the repeat is a few letters shorter. Relax your eyes and that shift turns into depth. The left edge always reads cleanly, and the whole poem is printed below the picture.</p>
+    <p class="links"><a href="../">See the finished picture</a> · <a href="https://github.com/VinceAtWorkingSoftware/road-not-taken-stereogram">Source on GitHub</a></p>
+  </header>
+
+  <div class="panel" id="panel">
+    <div class="controls">
+      <label class="field"><span class="label">Letters</span>
+        <select id="source">
+          <option value="poem">A famous poem</option>
+          <option value="random">Random letters</option>
+        </select>
+      </label>
+      <label class="field" id="poemField"><span class="label">Poem</span>
+        <select id="poem">
+          <option value="road">The Road Not Taken, Frost</option>
+          <option value="tyger">The Tyger, Blake</option>
+          <option value="daffodils">I Wandered Lonely as a Cloud, Wordsworth</option>
+          <option value="sonnet">Sonnet 18, Shakespeare</option>
+          <option value="woods">Stopping by Woods on a Snowy Evening, Frost</option>
+          <option value="own">My own text</option>
+        </select>
+      </label>
+      <label class="field" id="inkField"><span class="label">Words</span>
+        <input type="range" id="ink" min="0" max="100" step="5" value="100" aria-label="How strongly the words show">
+      </label>
+      <label class="field"><span class="label">Hidden shape</span>
+        <select id="shape">
+          <option value="poem">Matches the poem</option>
+          <option value="fork">Fork with signpost</option>
+          <option value="tiger">Tiger</option>
+          <option value="flame">Flame</option>
+          <option value="daffodil">Daffodil</option>
+          <option value="sun">Sun</option>
+          <option value="tree">Pine tree</option>
+          <option value="heart">Heart</option>
+          <option value="star">Star</option>
+          <option value="word">A word</option>
+        </select>
+      </label>
+      <label class="field" id="wordField" hidden><span class="label">Word</span>
+        <input type="text" id="word" value="HI" maxlength="10" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field"><span class="label">Look</span>
+        <select id="look" disabled>
+          <option value="tiles">Coloured tiles</option>
+          <option value="colour">Coloured letters</option>
+          <option value="plain">Plain letters</option>
+        </select>
+      </label>
+      <label class="field"><span class="label">Colours</span>
+        <select id="palette">
+          <option value="quiet">Quiet</option>
+          <option value="mono">Greys</option>
+          <option value="bright">Bright</option>
+        </select>
+      </label>
+      <label class="field"><span class="label">Letter size</span>
+        <input type="range" id="size" min="12" max="28" step="1" value="15">
+      </label>
+      <label class="field"><span class="label">Repeat: <span id="periodVal">24</span> letters</span>
+        <input type="range" id="period" min="12" max="36" step="2" value="24">
+      </label>
+      <label class="field"><span class="label">Pop-out</span>
+        <input type="range" id="depth" min="1" max="8" step="1" value="5">
+      </label>
+      <div class="field"><span class="label">How you view it</span>
+        <div class="seg" role="group" aria-label="How you view it">
+          <button type="button" id="modeWall" aria-pressed="true">Look through</button>
+          <button type="button" id="modeCross" aria-pressed="false">Cross eyes</button>
+        </div>
+      </div>
+      <span class="spacer"></span>
+      <div class="field"><span class="label">Help</span>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <button type="button" class="btn" id="reveal" aria-pressed="false">Show answer</button>
+          <button type="button" class="btn" id="reseed">Shuffle</button>
+          <button type="button" class="btn" id="fullBtn" aria-pressed="false">Full screen</button>
+          <button type="button" class="btn" id="bareBtn">Picture only</button>
+        </div>
+      </div>
+      <label class="field" id="textField" hidden><span class="label">Your text (each line stays a line)</span>
+        <textarea id="text" spellcheck="false" placeholder="Paste a poem or any text here."></textarea>
+      </label>
+    </div>
+    <button type="button" class="btn exit-bare" id="exitBare" hidden>Exit</button>
+    <div class="stage look-tiles pal-quiet" id="stage">
+      <div class="field-inner" id="inner">
+        <div class="guides" id="guides" aria-hidden="true"><span></span><span></span></div>
+        <pre id="grid" aria-label="Stereogram made of letters"></pre>
+        <p class="hint" id="hint"></p>
+      </div>
+    </div>
+    <div class="reading" id="reading">
+      <div class="reading-inner">
+        <h2 id="readTitle"></h2>
+        <p class="by" id="readAuthor"></p>
+        <p class="verse" id="readText"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="howto">
+    <section id="howWall">
+      <h2>Look through the screen</h2>
+      <ol>
+        <li>Move your face close to the screen, about 20&nbsp;cm, so everything is blurry.</li>
+        <li>Look at the two dots and let your eyes go slack, as if you were staring at a wall far behind the screen. Each dot doubles.</li>
+        <li>Wait until the two middle copies drift together and you see <strong>three dots</strong>, with the middle one solid.</li>
+        <li>Keep that, and slowly lean back. Let your gaze sink into the colours without trying to read. The shape rises out of the page.</li>
+      </ol>
+    </section>
+    <section id="howCross" hidden>
+      <h2>Cross your eyes</h2>
+      <ol>
+        <li>Sit at your normal distance and hold a fingertip halfway between your eyes and the screen.</li>
+        <li>Look at your fingertip. Behind it, the two dots each double.</li>
+        <li>Move the finger closer or further until you see <strong>three dots</strong>, with the middle one solid.</li>
+        <li>Hold your eyes there, take the finger away, and look down into the colours. The shape stands out in front.</li>
+      </ol>
+    </section>
+    <section>
+      <h2>If it does not work</h2>
+      <ul>
+        <li>Switch on <strong>Show answer</strong> to see where the shape is, then switch it off again.</li>
+        <li>If the two dots are hard to merge, make the <strong>Repeat</strong> shorter or the letters smaller. A longer repeat fits more of each line but asks more of your eyes.</li>
+        <li>If the words distract you, turn <strong>Words</strong> down while you look for the shape.</li>
+        <li>Once you see it, raise <strong>Pop-out</strong> to make the shape stand further out. If it falls apart, lower it.</li>
+        <li>Try a smaller letter size if the dots are far apart, or a larger one on a big screen.</li>
+        <li>If relaxing your eyes does nothing, try <strong>Cross eyes</strong>. Most people find one of the two ways easy.</li>
+      </ul>
+    </section>
+  </div>
+</div>
+<span class="probe" id="probe">MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM</span>
+
+<script>
+(function(){
+  var POEMS = {
+    road: {title:"The Road Not Taken", author:"Robert Frost, 1916", text:
+"Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrowth;\n\nThen took the other, as just as fair,\nAnd having perhaps the better claim,\nBecause it was grassy and wanted wear;\nThough as for that the passing there\nHad worn them really about the same,\n\nAnd both that morning equally lay\nIn leaves no step had trodden black.\nOh, I kept the first for another day!\nYet knowing how way leads on to way,\nI doubted if I should ever come back.\n\nI shall be telling this with a sigh\nSomewhere ages and ages hence:\nTwo roads diverged in a wood, and I-\nI took the one less traveled by,\nAnd that has made all the difference."},
+    tyger: {title:"The Tyger", author:"William Blake, 1794", text:
+"Tyger Tyger, burning bright,\nIn the forests of the night;\nWhat immortal hand or eye,\nCould frame thy fearful symmetry?\n\nIn what distant deeps or skies.\nBurnt the fire of thine eyes?\nOn what wings dare he aspire?\nWhat the hand, dare seize the fire?\n\nAnd what shoulder, & what art,\nCould twist the sinews of thy heart?\nAnd when thy heart began to beat,\nWhat dread hand? & what dread feet?\n\nWhat the hammer? what the chain,\nIn what furnace was thy brain?\nWhat the anvil? what dread grasp,\nDare its deadly terrors clasp!\n\nWhen the stars threw down their spears\nAnd water'd heaven with their tears:\nDid he smile his work to see?\nDid he who made the Lamb make thee?\n\nTyger Tyger burning bright,\nIn the forests of the night:\nWhat immortal hand or eye,\nDare frame thy fearful symmetry?"},
+    daffodils: {title:"I Wandered Lonely as a Cloud", author:"William Wordsworth, 1815", text:
+"I wandered lonely as a cloud\nThat floats on high o'er vales and hills,\nWhen all at once I saw a crowd,\nA host, of golden daffodils;\nBeside the lake, beneath the trees,\nFluttering and dancing in the breeze.\n\nContinuous as the stars that shine\nAnd twinkle on the milky way,\nThey stretched in never-ending line\nAlong the margin of a bay:\nTen thousand saw I at a glance,\nTossing their heads in sprightly dance.\n\nThe waves beside them danced; but they\nOut-did the sparkling waves in glee:\nA poet could not but be gay,\nIn such a jocund company:\nI gazed - and gazed - but little thought\nWhat wealth the show to me had brought:\n\nFor oft, when on my couch I lie\nIn vacant or in pensive mood,\nThey flash upon that inward eye\nWhich is the bliss of solitude;\nAnd then my heart with pleasure fills,\nAnd dances with the daffodils."},
+    sonnet: {title:"Sonnet 18", author:"William Shakespeare, 1609", text:
+"Shall I compare thee to a summer's day?\nThou art more lovely and more temperate:\nRough winds do shake the darling buds of May,\nAnd summer's lease hath all too short a date;\nSometime too hot the eye of heaven shines,\nAnd often is his gold complexion dimm'd;\nAnd every fair from fair sometime declines,\nBy chance or nature's changing course untrimm'd;\nBut thy eternal summer shall not fade,\nNor lose possession of that fair thou ow'st;\nNor shall death brag thou wander'st in his shade,\nWhen in eternal lines to time thou grow'st:\nSo long as men can breathe or eyes can see,\nSo long lives this, and this gives life to thee."},
+    woods: {title:"Stopping by Woods on a Snowy Evening", author:"Robert Frost, 1923", text:
+"Whose woods these are I think I know.\nHis house is in the village though;\nHe will not see me stopping here\nTo watch his woods fill up with snow.\n\nMy little horse must think it queer\nTo stop without a farmhouse near\nBetween the woods and frozen lake\nThe darkest evening of the year.\n\nHe gives his harness bells a shake\nTo ask if there is some mistake.\nThe only other sound's the sweep\nOf easy wind and downy flake.\n\nThe woods are lovely, dark and deep,\nBut I have promises to keep,\nAnd miles to go before I sleep,\nAnd miles to go before I sleep."}
+  };
+
+  var POEM_SHAPE = {road:"fork", tyger:"tiger", daffodils:"daffodil", sonnet:"sun", woods:"tree", own:"heart"};
+  var HINTS = {fork:"a path forking at a signpost, one way vanishing behind a tree, the other behind a mountain", tiger:"the tiger's face, with eyes and stripes",
+               flame:"a flame, burning bright", daffodil:"a host of daffodils", sun:"the summer sun, the eye of heaven",
+               tree:"a pine tree in the falling snow", heart:"a heart", star:"a star"};
+  function currentShape(){ return state.shape === "poem" ? (POEM_SHAPE[state.poem] || "heart") : state.shape; }
+
+  // A scene is a list of parts. Each part is drawn in white; its cells get a height between 0 (page) and 1 (nearest).
+  //   h: height, or fn(px, py, g) for a height that varies over the part
+  //   round: how far in from the edge (as a share of S) the surface keeps rising, giving it a rounded, domed form
+  //   mode: "max" (default) stands up from the page, "lift" adds on top, "carve" presses in
+  //   ramp: [top, bottom] tilts the whole ground so it comes towards you at the bottom
+  // Coordinates are in units of S, the size of the picture, around its centre.
+  function X(g, u){ return g.cx + u * g.S; }
+  function Y(g, v){ return g.cy + v * g.S; }
+  function circ(ctx, g, u, v, r){ ctx.beginPath(); ctx.arc(X(g, u), Y(g, v), r * g.S, 0, Math.PI * 2); ctx.fill(); }
+  function ell(ctx, g, u, v, rx, ry, rot){ ctx.beginPath(); ctx.ellipse(X(g, u), Y(g, v), rx * g.S, ry * g.S, rot || 0, 0, Math.PI * 2); ctx.fill(); }
+  function poly(ctx, g, pts){
+    ctx.beginPath();
+    for (var i = 0; i < pts.length; i += 2) ctx[i ? "lineTo" : "moveTo"](X(g, pts[i]), Y(g, pts[i+1]));
+    ctx.closePath(); ctx.fill();
+  }
+  function strokes(ctx, g, w, lines){
+    ctx.lineWidth = w * g.S;
+    lines.forEach(function(p){
+      ctx.beginPath(); ctx.moveTo(X(g, p[0]), Y(g, p[1]));
+      if (p.length === 4) ctx.lineTo(X(g, p[2]), Y(g, p[3]));
+      else ctx.quadraticCurveTo(X(g, p[2]), Y(g, p[3]), X(g, p[4]), Y(g, p[5]));
+      ctx.stroke();
+    });
+  }
+  function curve(ctx, g, pts){
+    ctx.beginPath(); ctx.moveTo(X(g, pts[0]), Y(g, pts[1]));
+    for (var i = 2; i < pts.length; i += 6)
+      ctx.bezierCurveTo(X(g, pts[i]), Y(g, pts[i+1]), X(g, pts[i+2]), Y(g, pts[i+3]), X(g, pts[i+4]), Y(g, pts[i+5]));
+    ctx.closePath(); ctx.fill();
+  }
+  function flower(ctx, g, u, v, s){
+    for (var k = 0; k < 6; k++){
+      var a = -Math.PI / 2 + k * Math.PI / 3;
+      ell(ctx, g, u + Math.cos(a) * .19 * s, v + Math.sin(a) * .19 * s, .17 * s, .09 * s, a);
+    }
+  }
+
+  var SCENES = {
+    heart: function(){ return [{h:1, round:.16, draw:function(ctx, g){
+      var s = g.S / 33;
+      ctx.beginPath();
+      for (var i = 0; i <= 200; i++){
+        var t = i / 200 * Math.PI * 2;
+        var x = 16 * Math.pow(Math.sin(t), 3);
+        var y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+        ctx[i ? "lineTo" : "moveTo"](g.cx + x * s, g.cy - (y + 2.5) * s);
+      }
+      ctx.fill();
+    }}]; },
+    star: function(){ return [{h:1, round:.12, draw:function(ctx, g){
+      var pts = [];
+      for (var k = 0; k < 10; k++){
+        var a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? .22 : .49;
+        pts.push(Math.cos(a) * r, .05 + Math.sin(a) * r);
+      }
+      poly(ctx, g, pts);
+    }}]; },
+    word: function(){ return [{h:1, round:.05, draw:function(ctx, g){
+      var text = (state.word || "").trim().toUpperCase() || "HI";
+      var face = function(sz){ return "900 " + sz + 'px "Arial Black", "Helvetica Neue", Arial, sans-serif'; };
+      var fs = g.S * 0.8; ctx.font = face(fs);
+      var w = ctx.measureText(text).width, room = Math.max(10, g.half * 2);
+      if (w > room){ fs *= room / w; ctx.font = face(fs); }
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(text, g.cx, g.cy + fs * 0.04);
+    }}]; },
+
+    // The Road Not Taken: a narrow path up the middle that forks at a signpost, one branch climbing
+    // into the distance, one running right to the foot of a mountain; a big tree on the left.
+    fork: function(){ return [
+      // Mountain and tree crown keep their edges high (floor), so the path disappears behind them.
+      {h:.9, round:.18, floor:.6, draw:function(ctx, g){
+        poly(ctx, g, [.18,.2, .3,-.24, .36,-.17, .48,-.43, .6,-.15, .65,-.19, .77,.2]);
+      }},
+      {h:.35, draw:function(ctx, g){
+        strokes(ctx, g, .21, [[0,.55, .04,.3, 0,.12]]);
+        strokes(ctx, g, .13, [[0,.12, -.12,.02, -.32,-.06], [0,.12, .16,.05, .34,-.08]]);
+      }},
+      {h:.75, round:.02, draw:function(ctx, g){ poly(ctx, g, [.02,.11, .05,.11, .05,-.25, .02,-.25]); }},
+      {h:.85, draw:function(ctx, g){
+        poly(ctx, g, [.05,-.235, -.09,-.235, -.13,-.195, -.09,-.155, .05,-.155]);
+        poly(ctx, g, [.02,-.13, .19,-.13, .23,-.09, .19,-.05, .02,-.05]);
+      }},
+      {h:.7, round:.02, draw:function(ctx, g){ poly(ctx, g, [-.385,-.03, -.325,-.03, -.31,.36, -.4,.36]); }},
+      {h:1, round:.12, floor:.6, draw:function(ctx, g){
+        circ(ctx, g, -.36, -.18, .18); circ(ctx, g, -.46, -.06, .11); circ(ctx, g, -.27, -.31, .1); circ(ctx, g, -.44, -.31, .09);
+      }}
+    ]; },
+
+    // The Tyger: a domed face with ears, a raised muzzle and nose, pressed-in eyes and stripes.
+    tiger: function(){ return [
+      {h:.75, round:.18, draw:function(ctx, g){ ell(ctx, g, 0, .06, .37, .32); }},
+      {h:.68, round:.05, draw:function(ctx, g){
+        poly(ctx, g, [-.37,-.1, -.31,-.4, -.12,-.25]); poly(ctx, g, [.37,-.1, .31,-.4, .12,-.25]); }},
+      {mode:"carve", h:.25, draw:function(ctx, g){
+        poly(ctx, g, [-.32,-.16, -.29,-.32, -.19,-.23]); poly(ctx, g, [.32,-.16, .29,-.32, .19,-.23]); }},
+      {mode:"lift", h:.2, round:.07, draw:function(ctx, g){ ell(ctx, g, -.075, .19, .12, .095); ell(ctx, g, .075, .19, .12, .095); }},
+      {mode:"lift", h:.15, draw:function(ctx, g){ poly(ctx, g, [-.07,.06, .07,.06, 0,.14]); }},
+      {mode:"carve", h:.45, draw:function(ctx, g){ ell(ctx, g, -.15, -.04, .08, .042, .25); ell(ctx, g, .15, -.04, .08, .042, -.25); }},
+      {mode:"carve", h:.3, draw:function(ctx, g){
+        strokes(ctx, g, .036, [[0,-.25, 0,-.14], [-.09,-.24, -.065,-.15], [.09,-.24, .065,-.15],
+          [-.37,.02, -.23,.05], [-.36,.13, -.23,.13], [-.33,.23, -.22,.2],
+          [.37,.02, .23,.05], [.36,.13, .23,.13], [.33,.23, .22,.2], [0,.14, 0,.22]]);
+      }}
+    ]; },
+
+    flame: function(){ return [
+      {h:.6, round:.12, draw:function(ctx, g){ curve(ctx, g, [0,.46, -.32,.46, -.38,.12, -.22,-.08, -.12,-.2, -.04,-.3, .02,-.5,
+        .08,-.3, .2,-.26, .16,-.1, .24,-.18, .27,-.24, .3,-.32, .42,-.08, .36,.46, 0,.46]); }},
+      {h:1, round:.08, draw:function(ctx, g){ curve(ctx, g, [0,.42, -.17,.42, -.19,.2, -.09,.05, -.04,-.03, 0,-.1, .02,-.2,
+        .09,-.05, .2,.1, .16,.26, .13,.38, .06,.42, 0,.42]); }}
+    ]; },
+
+    // Daffodils: one large flower with a hollow trumpet, a stem and leaves, two smaller flowers behind.
+    daffodil: function(){ return [
+      {h:.32, round:.04, draw:function(ctx, g){ flower(ctx, g, -.38, .22, .45); flower(ctx, g, .39, .27, .45); }},
+      {h:.48, round:.02, draw:function(ctx, g){ circ(ctx, g, -.38, .22, .045); circ(ctx, g, .39, .27, .045); }},
+      {h:.38, round:.02, draw:function(ctx, g){ strokes(ctx, g, .05, [[0,-.12, .04,.25, -.02,.5]]); }},
+      {h:.42, round:.04, draw:function(ctx, g){ ell(ctx, g, .13, .32, .15, .045, -.9); ell(ctx, g, -.1, .37, .13, .04, .9); }},
+      {h:.62, round:.08, draw:function(ctx, g){ flower(ctx, g, 0, -.12, 1); }},
+      {h:1, round:.05, draw:function(ctx, g){ circ(ctx, g, 0, -.12, .125); }},
+      {mode:"carve", h:.4, round:.03, draw:function(ctx, g){ circ(ctx, g, 0, -.12, .07); }}
+    ]; },
+
+    // Sonnet 18: rays that slope down away from a domed sun with a face.
+    sun: function(){ return [
+      {fn:function(px, py, g){ var r = Math.hypot(px - g.cx, py - g.cy) / g.S; return Math.max(.18, .75 - (r - .27) * 2.2); },
+       draw:function(ctx, g){
+        for (var k = 0; k < 12; k++){
+          var a = k * Math.PI / 6;
+          poly(ctx, g, [Math.cos(a - .17) * .27, Math.sin(a - .17) * .27, Math.cos(a) * .49, Math.sin(a) * .49,
+                        Math.cos(a + .17) * .27, Math.sin(a + .17) * .27]);
+        }
+      }},
+      {h:1, round:.26, draw:function(ctx, g){ circ(ctx, g, 0, 0, .27); }},
+      {mode:"carve", h:.25, draw:function(ctx, g){
+        circ(ctx, g, -.09, -.06, .035); circ(ctx, g, .09, -.06, .035);
+        ctx.lineWidth = .03 * g.S; ctx.beginPath(); ctx.arc(g.cx, g.cy + .01 * g.S, .12 * g.S, .2 * Math.PI, .8 * Math.PI); ctx.stroke();
+      }}
+    ]; },
+
+    // Stopping by Woods: tilted snowy ground, a layered pine with trunk, small trees behind, falling flakes.
+    tree: function(){ return [
+      {h:.4, round:.03, draw:function(ctx, g){
+        poly(ctx, g, [-.45,-.3, -.55,.05, -.35,.05]); poly(ctx, g, [.46,-.25, .36,.1, .56,.1]); }},
+      {h:.55, round:.02, draw:function(ctx, g){ poly(ctx, g, [-.06,.3, .06,.3, .06,.5, -.06,.5]); }},
+      {h:1, round:.06, draw:function(ctx, g){ poly(ctx, g, [0,-.12, -.42,.33, .42,.33]); }},
+      {h:.9, round:.06, draw:function(ctx, g){ poly(ctx, g, [0,-.33, -.3,.07, .3,.07]); }},
+      {h:.8, round:.06, draw:function(ctx, g){ poly(ctx, g, [0,-.5, -.18,-.19, .18,-.19]); }},
+      {h:.95, draw:function(ctx, g){
+        [[-.3,-.42], [.3,-.44], [-.48,-.08], [.47,-.02], [.27,-.2], [-.25,-.2]].forEach(function(p){ circ(ctx, g, p[0], p[1], .035); });
+      }}
+    ]; }
+  };
+
+  var CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  var PERIOD = 24;
+  var state = {source:"poem", poem:"road", text:"", shape:"poem", word:"HI", size:15, mode:"wall",
+               look:"tiles", shift:5, reveal:false, seed:20261121, ink:100, palette:"quiet"};
+  if (window.innerWidth < 560) state.size = 13;
+  var $ = function(id){ return document.getElementById(id); };
+  var grid = $("grid"), stage = $("stage"), probe = $("probe");
+  var cw = 10, lh = 22, cols = 0, rows = 24, chars = [], tones = [], mask = [], bgMask = [], poemLines = [];
+  $("size").value = state.size;
+
+  function look(){ return state.source === "poem" ? "tiles" : state.look; }
+
+  function rng(seed){
+    return function(){
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // Split a poem line into phrases that fit one repeat, breaking between words.
+  function wrapLine(line, width){
+    var out = [], cur = "";
+    line.split(" ").forEach(function(w){
+      while (w.length > width){ if (cur){ out.push(cur); cur = ""; } out.push(w.slice(0, width)); w = w.slice(width); }
+      if (!cur) cur = w;
+      else if (cur.length + 1 + w.length <= width) cur += " " + w;
+      else { out.push(cur); cur = w; }
+    });
+    out.push(cur);
+    return out;
+  }
+
+  function buildPoem(){
+    var src;
+    if (state.poem === "own" && state.text.trim()) src = state.text.replace(/\t/g, "  ").split(/\r?\n/);
+    else {
+      var p = POEMS[state.poem] || POEMS.road;
+      src = [p.title, p.author, ""].concat(p.text.split("\n"));
+    }
+    var width = PERIOD - 2, lines = [];
+    src.forEach(function(l){ lines = lines.concat(wrapLine(l.trim(), width)); });
+    return lines.slice(0, 120);
+  }
+
+  function measure(){
+    probe.style.fontSize = state.size + "px";
+    grid.style.fontSize = state.size + "px";
+    cw = probe.getBoundingClientRect().width / 40;
+    lh = state.size * (look() === "tiles" ? 1.12 : 1.25);
+    var avail = stage.clientWidth - 32;
+    cols = Math.max(PERIOD * 3, Math.min(260, Math.floor(avail / cw)));
+    // Full screen: as many lines as fit the screen. Otherwise: about half as tall as wide.
+    var target;
+    if (isFull()){
+      var used = 26 + 10 + 48 + 8 + (isBare() ? 0 : $("panel").querySelector(".controls").offsetHeight + 30);
+      target = Math.floor((window.innerHeight - used) / lh);
+    } else {
+      target = Math.round(cols * cw * 0.5 / lh);
+    }
+    if (state.source === "poem"){
+      poemLines = buildPoem();
+      rows = isFull() ? Math.max(16, target) : Math.max(16, target, poemLines.length + 2);
+    } else {
+      rows = Math.max(16, target);
+    }
+  }
+
+  // The poem line for a row; a short poem starts again after a blank line.
+  function lineFor(y){
+    if (y === 0 || !poemLines.length) return "";
+    var i = (y - 1) % (poemLines.length + 1);
+    return i < poemLines.length ? poemLines[i] : "";
+  }
+
+  // Distance from each cell inside a part to the nearest cell outside it, in pixels.
+  function edgeDistance(inside){
+    var INF = 1e9, dg = Math.hypot(cw, lh), d = [], x, y;
+    for (y = 0; y < rows; y++){ d.push([]); for (x = 0; x < cols; x++) d[y].push(inside[y][x] ? INF : 0); }
+    function at(yy, xx){ return yy < 0 || yy >= rows || xx < 0 || xx >= cols ? 0 : d[yy][xx]; }
+    for (y = 0; y < rows; y++) for (x = 0; x < cols; x++) if (d[y][x])
+      d[y][x] = Math.min(d[y][x], at(y, x-1) + cw, at(y-1, x) + lh, at(y-1, x-1) + dg, at(y-1, x+1) + dg);
+    for (y = rows - 1; y >= 0; y--) for (x = cols - 1; x >= 0; x--) if (d[y][x])
+      d[y][x] = Math.min(d[y][x], at(y, x+1) + cw, at(y+1, x) + lh, at(y+1, x+1) + dg, at(y+1, x-1) + dg);
+    return d;
+  }
+
+  // Builds the height of every cell (0 = page, 1 = nearest) from the current scene.
+  function buildMask(){
+    var W = cols * cw, H = rows * lh;
+    var poem = state.source === "poem";
+    // Centre the scene on the whole picture; size it so it stays clear of the flat reading strip on the left.
+    var leftLimit = poem ? (Math.ceil(PERIOD * 1.5) + 1) * cw : PERIOD * cw * 0.5;
+    var half = W / 2 - leftLimit;
+    var g = {cx:W / 2, cy:H / 2, S:Math.max(10, Math.min(H * 0.95, 2 * half / 1.1)), W:W, H:H, half:half};
+    var cv = document.createElement("canvas"); cv.width = cols; cv.height = rows;
+    var ctx = cv.getContext("2d", {willReadFrequently:true});
+    var x, y;
+    mask = []; bgMask = [];
+    for (y = 0; y < rows; y++){ mask.push(new Array(cols).fill(0)); bgMask.push(new Array(cols).fill(0)); }
+    var scene = (SCENES[currentShape()] || SCENES.heart)();
+    scene.forEach(function(p){
+      if (p.ramp){
+        for (y = 0; y < rows; y++){
+          var v = p.ramp[0] + (p.ramp[1] - p.ramp[0]) * (y + 0.5) / rows;
+          for (x = 0; x < cols; x++){ bgMask[y][x] = Math.max(bgMask[y][x], v); mask[y][x] = Math.max(mask[y][x], v); }
+        }
+        return;
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cols, rows);
+      ctx.setTransform(1 / cw, 0, 0, 1 / lh, 0, 0);
+      ctx.fillStyle = ctx.strokeStyle = "#fff"; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      p.draw(ctx, g);
+      var data = ctx.getImageData(0, 0, cols, rows).data, inside = [];
+      for (y = 0; y < rows; y++){ inside.push([]); for (x = 0; x < cols; x++) inside[y].push(data[(y * cols + x) * 4 + 3] > 110); }
+      var dist = p.round ? edgeDistance(inside) : null;
+      for (y = 0; y < rows; y++) for (x = 0; x < cols; x++){
+        if (!inside[y][x]) continue;
+        var prof = 1;
+        if (dist){
+          var t = Math.min(1, dist[y][x] / (p.round * g.S)), fl = p.floor != null ? p.floor : 0.35;
+          prof = fl + (1 - fl) * Math.sqrt(1 - (1 - t) * (1 - t));
+        }
+        var val = (p.fn ? p.fn((x + 0.5) * cw, (y + 0.5) * lh, g) : p.h) * prof;
+        if (p.mode === "lift") mask[y][x] += val;
+        else if (p.mode === "carve") mask[y][x] -= val;
+        else mask[y][x] = Math.max(mask[y][x], val);
+      }
+    });
+    // With a poem, keep the first repeat and half the next one flat, so nothing shifts the left edge.
+    var keep = poem ? Math.ceil(PERIOD * 1.5) + 1 : 0;
+    for (y = 0; y < rows; y++) for (x = 0; x < cols; x++){
+      if (x < keep){ mask[y][x] = 0; bgMask[y][x] = 0; }
+      else mask[y][x] = Math.max(0, Math.min(1, mask[y][x]));
+    }
+  }
+
+  function renderReading(){
+    var poem = state.source === "poem";
+    $("reading").hidden = !poem;
+    if (!poem) return;
+    if (state.poem === "own" && state.text.trim()){
+      $("readTitle").textContent = "Your text"; $("readAuthor").textContent = ""; $("readText").textContent = state.text.trim();
+    } else {
+      var p = POEMS[state.poem] || POEMS.road;
+      $("readTitle").textContent = p.title; $("readAuthor").textContent = p.author; $("readText").textContent = p.text;
+    }
+  }
+
+  // Each point on the surface ties together the two cells its left and right eye see, centred on
+  // the point. Every cell gets at most one partner on each side, so the links form simple chains
+  // running left to right. Where a new link would clash with an existing one (at a depth step), it is skipped.
+  function linkRow(y){
+    var lp = new Array(cols).fill(-1), rp = new Array(cols).fill(-1), x;
+    var maxShift = Math.min(state.shift, Math.floor(PERIOD / 3));
+    for (x = 0; x < cols; x++){
+      var d = Math.round(mask[y][x] * maxShift);
+      var sep = state.mode === "wall" ? PERIOD - d : PERIOD + d;
+      var left = x - (sep >> 1), right = left + sep;
+      if (left < 0 || right >= cols || rp[left] !== -1 || lp[right] !== -1) continue;
+      rp[left] = right; lp[right] = left;
+    }
+    return lp;
+  }
+
+  // A cell with no partner on its left starts a chain and gets fresh content; every other cell
+  // copies its left partner, so letters and tile colours repeat together. Chains start at the
+  // left edge, so the first repeat on the left reads as clean text.
+  function generate(){
+    var rand = rng(state.seed);
+    chars = []; tones = [];
+    for (var y = 0; y < rows; y++){
+      var lp = linkRow(y), row = new Array(cols), tone = new Array(cols), x;
+      var phrase = state.source === "poem" ? lineFor(y) : "";
+      while (phrase.length < PERIOD) phrase += " ";
+      for (x = 0; x < cols; x++){
+        if (lp[x] >= 0){ row[x] = row[lp[x]]; tone[x] = tone[lp[x]]; }
+        else if (state.source === "poem"){ row[x] = phrase[x % PERIOD]; tone[x] = Math.floor(rand() * 8); }
+        else { row[x] = CHARS[Math.floor(rand() * CHARS.length)]; tone[x] = row[x].charCodeAt(0) % 8; }
+      }
+      chars.push(row); tones.push(tone);
+    }
+  }
+
+  function esc(c){ return c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === "&" ? "&amp;" : c; }
+
+  function render(){
+    var out = [];
+    for (var y = 0; y < rows; y++){
+      var line = "";
+      for (var x = 0; x < cols; x++){
+        var cls = "g" + tones[y][x] + (state.reveal && mask[y][x] > bgMask[y][x] + 0.02 ? " h" : "");
+        line += '<span class="' + cls + '">' + esc(chars[y][x]) + "</span>";
+      }
+      out.push(line);
+    }
+    grid.innerHTML = out.join("\n");
+    var width = cols * cw;
+    $("guides").style.width = width + "px";
+    var dots = $("guides").children, gap = PERIOD * cw;
+    dots[0].style.left = (width / 2 - gap / 2 - 8) + "px";
+    dots[1].style.left = (width / 2 + gap / 2 - 8) + "px";
+    stage.className = "stage look-" + look() + " pal-" + state.palette;
+    applyInk();
+    var sh = currentShape();
+    $("hint").textContent = "Hidden here: " + (sh === "word"
+      ? 'the word "' + ((state.word || "").trim().toUpperCase() || "HI") + '"'
+      : HINTS[sh]) + ".";
+  }
+  function applyInk(){ stage.style.setProperty("--ink-a", state.source === "poem" ? state.ink / 100 : 1); }
+
+  function full(){ measure(); buildMask(); generate(); render(); renderReading(); }
+  function setPressed(id, on){ $(id).setAttribute("aria-pressed", on ? "true" : "false"); }
+  function syncFields(){
+    var poem = state.source === "poem";
+    $("poemField").hidden = !poem;
+    $("inkField").hidden = !poem;
+    $("textField").hidden = !(poem && state.poem === "own");
+    $("look").disabled = poem;
+    $("look").value = poem ? "tiles" : state.look;
+    $("wordField").hidden = state.shape !== "word";
+  }
+
+  function setPeriod(p){ PERIOD = p; $("period").value = p; $("periodVal").textContent = p; }
+  $("source").addEventListener("change", function(e){
+    state.source = e.target.value;
+    setPeriod(state.source === "poem" ? 24 : 12);
+    syncFields(); full();
+  });
+  $("period").addEventListener("input", function(e){ setPeriod(+e.target.value); full(); });
+  $("poem").addEventListener("change", function(e){ state.poem = e.target.value; syncFields(); full(); });
+  $("text").addEventListener("input", function(e){ state.text = e.target.value; full(); });
+  $("ink").addEventListener("input", function(e){ state.ink = +e.target.value; applyInk(); });
+  $("shape").addEventListener("change", function(e){ state.shape = e.target.value; syncFields(); full(); });
+  $("word").addEventListener("input", function(e){ state.word = e.target.value; buildMask(); generate(); render(); });
+  $("look").addEventListener("change", function(e){ state.look = e.target.value; full(); });
+  $("palette").addEventListener("change", function(e){
+    state.palette = e.target.value;
+    stage.className = "stage look-" + look() + " pal-" + state.palette;
+  });
+  $("size").addEventListener("input", function(e){ state.size = +e.target.value; full(); });
+  $("depth").addEventListener("input", function(e){ state.shift = +e.target.value; generate(); render(); });
+  function setMode(m){
+    state.mode = m;
+    setPressed("modeWall", m === "wall"); setPressed("modeCross", m === "cross");
+    $("howWall").hidden = m !== "wall"; $("howCross").hidden = m !== "cross";
+    generate(); render();
+  }
+  $("modeWall").addEventListener("click", function(){ setMode("wall"); });
+  $("modeCross").addEventListener("click", function(){ setMode("cross"); });
+  $("reveal").addEventListener("click", function(){ state.reveal = !state.reveal; setPressed("reveal", state.reveal); render(); });
+  $("reseed").addEventListener("click", function(){ state.seed = Math.floor(Math.random() * 1e9); generate(); render(); });
+
+  function isFull(){ return $("panel").classList.contains("full"); }
+  function isBare(){ return $("panel").classList.contains("bare"); }
+  function setFull(on, bare){
+    bare = on && !!bare;
+    $("panel").classList.toggle("full", on);
+    $("panel").classList.toggle("bare", bare);
+    document.body.classList.toggle("has-full", on);
+    setPressed("fullBtn", on && !bare);
+    $("fullBtn").textContent = on && !bare ? "Exit full screen" : "Full screen";
+    $("exitBare").hidden = !bare;
+  }
+  window.addEventListener("resize", function(){ if (isFull()) full(); });
+  function goFull(on, bare){
+    setFull(on, bare);
+    full();
+    try {
+      if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function(){});
+      else if (!on && document.fullscreenElement) document.exitFullscreen().catch(function(){});
+    } catch (e) {}
+  }
+  $("fullBtn").addEventListener("click", function(){ goFull(!isFull(), false); });
+  $("bareBtn").addEventListener("click", function(){ goFull(true, true); });
+  $("exitBare").addEventListener("click", function(){ goFull(false); });
+  document.addEventListener("fullscreenchange", function(){ if (!document.fullscreenElement && isFull()){ setFull(false); full(); } });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && isFull()){ setFull(false); full(); } });
+
+  var lastW = 0;
+  if (window.ResizeObserver){
+    new ResizeObserver(function(){
+      if (Math.abs(stage.clientWidth - lastW) < 4) return;
+      lastW = stage.clientWidth; full();
+    }).observe(stage);
+  }
+  syncFields();
+  full();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(full);
+})();
+</script>
+</body>
+</html>
