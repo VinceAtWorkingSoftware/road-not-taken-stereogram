@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Hide your own word or message in falling green rain and read it in 3D by relaxing your eyes.">
+<title>Rain Stereogram</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Page basics */
+body{margin:0}
+[hidden]{display:none!important}
+.links{margin:2px 0 0; font-size:14px}
+.links a{color:var(--accent)}
+/* Layout: one dark column. The falling-rain canvas is the hero; controls sit on its top edge, a short how-to follows.
+   A single dark look by choice: the rain only works on black. */
+:root{
+  --bg:#040705; --panel:#081009; --fg:#d3ead9; --muted:#7f9c88; --line:#18281c;
+  --accent:#46f07f; --accent-ink:#03100a; --dot:#a8ffc4; --field:#0c160f;
+  --display:"Space Grotesk",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--body); font-size:15px; line-height:1.55;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:28px 48px;
+}
+.wrap{max-width:1240px; margin:0 auto; display:grid; gap:20px}
+header{display:grid; gap:6px}
+h1{font-family:var(--display); font-weight:700; font-size:clamp(26px,4vw,38px); line-height:1.1; margin:0; letter-spacing:-.01em; text-wrap:balance}
+header p{margin:0; color:var(--muted); max-width:66ch}
+
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.panel.full{
+  position:fixed; inset:0; z-index:50; border:0; border-radius:0; overflow:auto;
+  padding-top:env(safe-area-inset-top, 0px); padding-bottom:env(safe-area-inset-bottom, 0px);
+  padding-left:env(safe-area-inset-left, 0px); padding-right:env(safe-area-inset-right, 0px);
+}
+.panel.bare{display:flex; flex-direction:column; background:var(--bg)}
+.panel.bare .controls{display:none}
+.panel.bare .stage{margin-block:auto; width:100%; box-sizing:border-box}
+body.has-full{overflow:hidden}
+.exit-bare{
+  position:fixed; z-index:60; opacity:.6;
+  top:calc(12px + env(safe-area-inset-top, 0px)); right:calc(12px + env(safe-area-inset-right, 0px));
+}
+.exit-bare:hover,.exit-bare:focus-visible{opacity:1}
+
+.controls{display:flex; flex-wrap:wrap; gap:14px 22px; align-items:end; padding:14px 16px; border-bottom:1px solid var(--line)}
+.field{display:grid; gap:5px; min-width:0}
+.label{font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--muted)}
+input[type=text]{
+  font:inherit; font-family:var(--mono); color:var(--fg); background:var(--field); border:1px solid var(--line); border-radius:6px;
+  padding:6px 10px; height:34px; width:12em; max-width:100%; box-sizing:border-box;
+}
+input[type=range]{width:120px; accent-color:var(--accent); height:34px; margin:0}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; height:34px}
+.seg button,.btn{
+  font:inherit; font-size:14px; font-weight:500; color:var(--fg); background:var(--field); border:0; padding:0 12px; cursor:pointer; height:34px;
+}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"],.btn[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink)}
+.btn{border:1px solid var(--line); border-radius:6px}
+.btn[aria-pressed="true"]{border-color:var(--accent)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.btnrow{display:flex; gap:8px; flex-wrap:wrap}
+.spacer{flex:1 1 0}
+
+.stage{padding:22px 16px 26px; overflow-x:auto}
+.inner{margin:0 auto; width:max-content}
+.guides{position:relative; height:26px; margin-bottom:10px}
+.guides span{position:absolute; top:4px; width:16px; height:16px; border-radius:50%; background:var(--dot)}
+canvas{display:block; background:#020403}
+
+.howto{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px 32px}
+.howto section{min-width:0}
+h2{font-family:var(--display); font-weight:700; font-size:19px; margin:0 0 8px}
+ol{margin:0; padding-left:1.3em; display:grid; gap:6px}
+.howto ul{margin:0; padding-left:1.1em; display:grid; gap:4px; color:var(--muted)}
+@media (max-width:520px){ .spacer{display:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Rain Stereogram</h1>
+    <p>Green characters fall down the screen. Every column of rain repeats across each row, and where the hidden text sits the repeat is a little shorter. Relax your eyes and the text floats in front of the rain. In scrolling mode a message glides past, a few letters at a time.</p>
+    <p class="links"><a href="../">See the picture</a> · <a href="https://github.com/VinceAtWorkingSoftware/road-not-taken-stereogram">Source on GitHub</a></p>
+  </header>
+
+  <div class="panel" id="panel">
+    <div class="controls" id="controls">
+      <label class="field"><span class="label">Hidden text</span>
+        <input type="text" id="word" value="HELLO FELLOW HUMAN. I GREET YOU!" maxlength="160" autocomplete="off" spellcheck="false" style="width:22em">
+      </label>
+      <div class="field"><span class="label">Text</span>
+        <div class="seg" role="group" aria-label="Still or scrolling text">
+          <button type="button" id="still" aria-pressed="false">Still</button>
+          <button type="button" id="scroll" aria-pressed="true">Scrolling</button>
+        </div>
+      </div>
+      <label class="field" id="visibleField"><span class="label">Letters on screen</span>
+        <input type="range" id="visible" min="3" max="8" step="0.5" value="5.5">
+      </label>
+      <label class="field" id="scrollSpeedField"><span class="label">Scroll speed</span>
+        <input type="range" id="scrollSpeed" min="0" max="1.5" step="0.1" value="0.5" aria-label="Scroll speed in letters per second, 0 stops it">
+      </label>
+      <label class="field"><span class="label">Pop-out</span>
+        <input type="range" id="depth" min="1" max="5" step="1" value="4">
+      </label>
+      <label class="field"><span class="label">Letter size</span>
+        <input type="range" id="size" min="10" max="26" step="1" value="14">
+      </label>
+      <label class="field"><span class="label">Rain speed</span>
+        <input type="range" id="speed" min="0" max="3" step="0.2" value="0.6" aria-label="Rain speed, 0 stops it">
+      </label>
+      <div class="field"><span class="label">How you view it</span>
+        <div class="seg" role="group" aria-label="How you view it">
+          <button type="button" id="modeWall" aria-pressed="true">Look through</button>
+          <button type="button" id="modeCross" aria-pressed="false">Cross eyes</button>
+        </div>
+      </div>
+      <span class="spacer"></span>
+      <div class="field"><span class="label">Help</span>
+        <div class="btnrow">
+          <button type="button" class="btn" id="pause" aria-pressed="false">Pause</button>
+          <button type="button" class="btn" id="restart">From the start</button>
+          <button type="button" class="btn" id="tiles" aria-pressed="true">Tiles</button>
+          <button type="button" class="btn" id="reveal" aria-pressed="false">Show answer</button>
+          <button type="button" class="btn" id="fullBtn" aria-pressed="false">Full screen</button>
+          <button type="button" class="btn" id="bareBtn">Picture only</button>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="btn exit-bare" id="exitBare" hidden>Exit</button>
+    <div class="stage" id="stage">
+      <div class="inner">
+        <div class="guides" id="guides" aria-hidden="true"><span></span><span></span></div>
+        <canvas id="rain" aria-label="Falling green characters with hidden text in 3D"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="howto">
+    <section id="howWall">
+      <h2>Look through the screen</h2>
+      <ol>
+        <li>Move your face close to the screen, about 20&nbsp;cm, so everything is blurry.</li>
+        <li>Look at the two dots and let your eyes go slack, as if you were staring at a wall far behind the screen. Each dot doubles.</li>
+        <li>Wait until you see <strong>three dots</strong>, with the middle one solid.</li>
+        <li>Keep that, lean back slowly and let your gaze sink into the rain. The letters float in front of it.</li>
+      </ol>
+    </section>
+    <section id="howCross" hidden>
+      <h2>Cross your eyes</h2>
+      <ol>
+        <li>Hold a fingertip halfway between your eyes and the screen and look at it.</li>
+        <li>Move the finger until the two dots behind it turn into <strong>three dots</strong>.</li>
+        <li>Hold your eyes there, take the finger away and look down into the rain. The letters stand out in front.</li>
+      </ol>
+    </section>
+    <section>
+      <h2>If it does not work</h2>
+      <ul>
+        <li>Press <strong>Pause</strong>. A still picture is easier to lock onto; press it again once you see the letters.</li>
+        <li>Keep <strong>Tiles</strong> on. The still tiles behind the rain give your eyes a steady pattern to match.</li>
+        <li>Lower the <strong>Scroll speed</strong> if the letters smear while they move.</li>
+        <li>Switch on <strong>Show answer</strong> to see where the letters are.</li>
+        <li>If the dots are hard to merge, make the letters smaller.</li>
+        <li>If relaxing your eyes does nothing, try <strong>Cross eyes</strong>.</li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  // Half-width katakana, digits and a few signs, as in classic terminal rain.
+  var GLYPHS = "ｦｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789Z:.=*+<>|".split("");
+  var PERIOD = 16;
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var st = {word:"HELLO FELLOW HUMAN. I GREET YOU!", scroll:true, visible:5.5, scrollSpeed:0.5,
+            shift:4, size:14, speed:0.6, paused:reduce, mode:"wall", reveal:false, tiles:true};
+  // Still background tiles in four dark greens: a steady pattern for the eyes to match.
+  var BG = ["#020403", "#08190d", "#0e2a16", "#153a20"];
+  var $ = function(id){ return document.getElementById(id); };
+  var panel = $("panel"), stage = $("stage"), canvas = $("rain"), ctx = canvas.getContext("2d");
+  var cw = 10, ch = 18, cols = 0, rows = 0, W = 0, H = 0, mask = [], lps = [], drops = [], t = 0;
+  var strip = [], stripCols = 0, scrollPos = 0, letterCells = 10, shownOff = -1;
+  var PAL = [];
+  for (var i = 0; i <= 15; i++){
+    if (i === 15){ PAL.push("#e8fff0"); continue; }
+    var l = i / 14;
+    PAL.push("rgb(" + Math.round(10 + 40 * l * l) + "," + Math.round(38 + 212 * l) + "," + Math.round(22 + 70 * l) + ")");
+  }
+  if (reduce){ $("pause").setAttribute("aria-pressed", "true"); $("pause").textContent = "Play"; }
+
+  function hash(a, b, c){
+    var h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263) ^ Math.imul(c | 0, 1274126177);
+    h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  }
+
+  function isFull(){ return panel.classList.contains("full"); }
+  function isBare(){ return panel.classList.contains("bare"); }
+
+  function layout(){
+    var w = stage.clientWidth - 32, h;
+    if (isFull()) h = window.innerHeight - (26 + 10 + 48 + 8) - (isBare() ? 0 : $("controls").offsetHeight);
+    else h = Math.max(300, Math.min(w * 0.5, window.innerHeight * 0.7));
+    cw = st.size * 0.62; ch = st.size * 1.15;
+    cols = Math.max(PERIOD * 3, Math.floor(w / cw));
+    rows = Math.max(12, Math.floor(h / ch));
+    W = cols * cw; H = rows * ch;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var g = $("guides"), gap = PERIOD * cw;
+    g.style.width = W + "px";
+    g.children[0].style.left = (W / 2 - gap / 2 - 8) + "px";
+    g.children[1].style.left = (W / 2 + gap / 2 - 8) + "px";
+    drops = [];
+    for (var c = 0; c < cols; c++){
+      var list = [];
+      for (var k = 0; k < 2; k++){
+        var len = 6 + Math.floor(hash(c, k, 3) * 18);
+        list.push({sp:0.35 + hash(c, k, 1) * 0.9, off:hash(c, k, 2) * 997, len:len, cyc:rows + len + Math.floor(hash(c, k, 4) * rows)});
+      }
+      drops.push(list);
+    }
+    buildStrip(true); draw();
+  }
+
+  // The hidden text as a strip of heights (0 = rain, up to 1 = nearest), one cell per entry.
+  // Still: one screen wide, text centred. Scrolling: blank screen, the whole message, then a gap.
+  function buildStrip(restart){
+    var text = (st.word || "").trim() || "HELLO";
+    // Scrolling uses a tall condensed face, so 5 to 6 letters across still fill most of the height.
+    var face = st.scroll
+      ? function(sz){ return sz + 'px Impact, Haettenschweiler, "Arial Narrow Bold", "Franklin Gothic Bold", "Arial Black", sans-serif'; }
+      : function(sz){ return "900 " + sz + 'px "Arial Black", "Helvetica Neue", Arial, sans-serif'; };
+    var probe = document.createElement("canvas").getContext("2d");
+    probe.font = face(100);
+    var view = W - PERIOD * cw * 1.2, fs, textW, lead;
+    if (st.scroll){
+      var avg = runWidth(probe, text, 100) / Math.max(1, text.length);
+      fs = Math.min(H * 0.78, 100 * (view / st.visible) / avg);
+      probe.font = face(fs); textW = runWidth(probe, text, fs);
+      lead = cols;
+      stripCols = lead + Math.ceil(textW / cw) + Math.round(cols * 0.6);
+      letterCells = (avg * fs / 100) / cw;
+    } else {
+      fs = H * 0.62; probe.font = face(fs); textW = probe.measureText(text).width;
+      if (textW > view){ fs *= view / textW; probe.font = face(fs); textW = probe.measureText(text).width; }
+      stripCols = cols; lead = 0;
+    }
+    var cv = document.createElement("canvas"); cv.width = stripCols; cv.height = rows;
+    var m = cv.getContext("2d", {willReadFrequently:true});
+    m.setTransform(1 / cw, 0, 0, 1 / ch, 0, 0);
+    m.font = face(fs); m.fillStyle = "#fff"; m.textBaseline = "middle";
+    if (st.scroll) drawRun(m, text, lead * cw, H / 2, fs);
+    else { m.textAlign = "center"; m.fillText(text, W / 2, H / 2 + fs * 0.04); }
+    var data = m.getImageData(0, 0, stripCols, rows).data, x, y;
+    var d = [];
+    for (y = 0; y < rows; y++){
+      var r = new Float32Array(stripCols);
+      for (x = 0; x < stripCols; x++) r[x] = data[(y * stripCols + x) * 4 + 3] > 110 ? 99 : 0;
+      d.push(r);
+    }
+    function at(yy, xx){ return yy < 0 || yy >= rows || xx < 0 || xx >= stripCols ? 0 : d[yy][xx]; }
+    for (y = 0; y < rows; y++) for (x = 0; x < stripCols; x++) if (d[y][x]) d[y][x] = Math.min(d[y][x], at(y, x-1) + 1, at(y-1, x) + 1);
+    for (y = rows - 1; y >= 0; y--) for (x = stripCols - 1; x >= 0; x--) if (d[y][x]) d[y][x] = Math.min(d[y][x], at(y, x+1) + 1, at(y+1, x) + 1);
+    strip = d.map(function(r){ return r.map(function(v){ return v ? 0.7 + 0.3 * Math.min(1, (v - 1) / 2) : 0; }); });
+    if (restart || !st.scroll) scrollPos = st.scroll ? cols * 0.45 : 0;
+    scrollPos = scrollPos % stripCols;
+    shownOff = -1; updateWindow();
+  }
+
+  // Scrolling text is set letter by letter, so the L can get a longer, thicker foot:
+  // the condensed face's own L foot is too short to survive in depth and reads like an I.
+  var L_EXTRA = 0.2;
+  function runWidth(c2d, text, fs){
+    var w = 0;
+    for (var i = 0; i < text.length; i++) w += c2d.measureText(text[i]).width + (text[i] === "L" ? L_EXTRA * fs : 0);
+    return w;
+  }
+  function drawRun(c2d, text, x, cy, fs){
+    c2d.textAlign = "left"; c2d.textBaseline = "alphabetic";
+    var capH = c2d.measureText("H").actualBoundingBoxAscent || fs * 0.79;
+    var base = cy + capH / 2;
+    for (var i = 0; i < text.length; i++){
+      var chr = text[i], mm = c2d.measureText(chr);
+      c2d.fillText(chr, x, base);
+      if (chr === "L"){
+        var left = x - (mm.actualBoundingBoxLeft || 0);
+        var right = x + (mm.actualBoundingBoxRight || mm.width) + L_EXTRA * fs;
+        var foot = capH * 0.24;
+        c2d.fillRect(left, base - foot, right - left, foot);
+        x += L_EXTRA * fs;
+      }
+      x += mm.width;
+    }
+  }
+
+  // Copy the visible part of the strip into the mask, and relink the rows when it moved.
+  function updateWindow(){
+    var off = st.scroll ? Math.floor(scrollPos) % stripCols : 0;
+    if (off === shownOff) return false;
+    shownOff = off; mask = [];
+    for (var y = 0; y < rows; y++){
+      var row = new Float32Array(cols), s = strip[y];
+      for (var x = 0; x < cols; x++) row[x] = s[(x + off) % stripCols];
+      mask.push(row);
+    }
+    link();
+    return true;
+  }
+
+  // Each point ties together the two cells its eyes see. Every cell gets at most one partner on each
+  // side, so the links form chains running left to right; clashing links at depth steps are skipped.
+  function link(){
+    lps = [];
+    for (var y = 0; y < rows; y++){
+      var lp = new Int32Array(cols).fill(-1), rp = new Int32Array(cols).fill(-1);
+      for (var x = 0; x < cols; x++){
+        var dd = Math.round(mask[y][x] * st.shift);
+        var sep = st.mode === "wall" ? PERIOD - dd : PERIOD + dd;
+        var left = x - (sep >> 1), right = left + sep;
+        if (left < 0 || right >= cols || rp[left] !== -1 || lp[right] !== -1) continue;
+        rp[left] = right; lp[right] = left;
+      }
+      lps.push(lp);
+    }
+  }
+
+  // The rain at a cell: a still background tile, a dim glow, and two falling streaks per column.
+  function field(c, y){
+    var lvl = 2 + Math.floor(hash(c, y, 7) * 6), head = false, list = drops[c];
+    for (var k = 0; k < list.length; k++){
+      var dr = list[k], pos = (t * dr.sp + dr.off) % dr.cyc, dist = pos - y;
+      if (dist >= 0 && dist < dr.len){
+        if (dist < 1) head = true;
+        var v = Math.round(14 * (1 - dist / dr.len));
+        if (v > lvl) lvl = v;
+      }
+    }
+    if (head) lvl = 15;
+    var rate = head ? 0.8 : 0.015 + hash(c, y, 5) * 0.035;
+    var gi = Math.floor(hash(c, y, Math.floor(t * rate + hash(c, y, 9) * 50)) * GLYPHS.length);
+    var bg = Math.floor(hash(c, y, 11) * 4);
+    return (bg * 16 + lvl) * 64 + gi;
+  }
+
+  function draw(){
+    ctx.fillStyle = "#020403"; ctx.fillRect(0, 0, W, H);
+    ctx.font = "500 " + st.size + 'px "JetBrains Mono", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "MS Gothic", monospace';
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    var vals = new Int32Array(cols);
+    for (var y = 0; y < rows; y++){
+      var lp = lps[y], cy = y * ch + ch / 2 + 1;
+      for (var x = 0; x < cols; x++){
+        var v = lp[x] >= 0 ? vals[lp[x]] : field(x, y);
+        vals[x] = v;
+        if (st.reveal && mask[y][x] > 0){ ctx.fillStyle = "#1d5a7a"; ctx.fillRect(x * cw, y * ch, cw, ch); }
+        else if (st.tiles && (v >> 10)){ ctx.fillStyle = BG[v >> 10]; ctx.fillRect(x * cw, y * ch, cw + 0.5, ch + 0.5); }
+        ctx.fillStyle = PAL[(v >> 6) & 15];
+        ctx.fillText(GLYPHS[v & 63], x * cw + cw / 2, cy);
+      }
+    }
+  }
+
+  var last = 0;
+  function tick(ts){
+    requestAnimationFrame(tick);
+    var dt = Math.min(200, ts - last);
+    if (st.paused || document.hidden){ last = ts; return; }
+    if (dt < 50) return;
+    last = ts;
+    var changed = false;
+    if (st.speed > 0){ t += st.speed * dt / 1000 * 14; changed = true; }
+    if (st.scroll && st.scrollSpeed > 0){
+      scrollPos = (scrollPos + st.scrollSpeed * letterCells * dt / 1000) % stripCols;
+      if (updateWindow()) changed = true;
+    }
+    if (changed) draw();
+  }
+
+  function setPressed(id, on){ $(id).setAttribute("aria-pressed", on ? "true" : "false"); }
+  function syncFields(){
+    setPressed("still", !st.scroll); setPressed("scroll", st.scroll);
+    $("visibleField").hidden = !st.scroll; $("scrollSpeedField").hidden = !st.scroll;
+    $("restart").hidden = !st.scroll;
+  }
+
+  $("word").addEventListener("input", function(e){ st.word = e.target.value; buildStrip(false); draw(); });
+  $("still").addEventListener("click", function(){ st.scroll = false; syncFields(); buildStrip(true); draw(); });
+  $("scroll").addEventListener("click", function(){ st.scroll = true; syncFields(); buildStrip(true); draw(); });
+  $("visible").addEventListener("input", function(e){ st.visible = +e.target.value; buildStrip(false); draw(); });
+  $("scrollSpeed").addEventListener("input", function(e){ st.scrollSpeed = +e.target.value; });
+  $("restart").addEventListener("click", function(){ buildStrip(true); draw(); });
+  $("depth").addEventListener("input", function(e){ st.shift = +e.target.value; link(); draw(); });
+  $("size").addEventListener("input", function(e){ st.size = +e.target.value; layout(); });
+  $("speed").addEventListener("input", function(e){ st.speed = +e.target.value; });
+  function setMode(m){
+    st.mode = m;
+    setPressed("modeWall", m === "wall"); setPressed("modeCross", m === "cross");
+    $("howWall").hidden = m !== "wall"; $("howCross").hidden = m !== "cross";
+    link(); draw();
+  }
+  $("modeWall").addEventListener("click", function(){ setMode("wall"); });
+  $("modeCross").addEventListener("click", function(){ setMode("cross"); });
+  $("pause").addEventListener("click", function(){
+    st.paused = !st.paused; setPressed("pause", st.paused);
+    $("pause").textContent = st.paused ? "Play" : "Pause";
+  });
+  $("reveal").addEventListener("click", function(){ st.reveal = !st.reveal; setPressed("reveal", st.reveal); draw(); });
+  $("tiles").addEventListener("click", function(){ st.tiles = !st.tiles; setPressed("tiles", st.tiles); draw(); });
+
+  function setFull(on, bare){
+    bare = on && !!bare;
+    panel.classList.toggle("full", on);
+    panel.classList.toggle("bare", bare);
+    document.body.classList.toggle("has-full", on);
+    setPressed("fullBtn", on && !bare);
+    $("fullBtn").textContent = on && !bare ? "Exit full screen" : "Full screen";
+    $("exitBare").hidden = !bare;
+  }
+  function goFull(on, bare){
+    setFull(on, bare); layout();
+    try {
+      if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function(){});
+      else if (!on && document.fullscreenElement) document.exitFullscreen().catch(function(){});
+    } catch (e) {}
+  }
+  $("fullBtn").addEventListener("click", function(){ goFull(!isFull(), false); });
+  $("bareBtn").addEventListener("click", function(){ goFull(true, true); });
+  $("exitBare").addEventListener("click", function(){ goFull(false); });
+  document.addEventListener("fullscreenchange", function(){ if (!document.fullscreenElement && isFull()){ setFull(false); layout(); } });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && isFull()){ setFull(false); layout(); } });
+
+  var timer = null, lastW = 0;
+  window.addEventListener("resize", function(){ clearTimeout(timer); timer = setTimeout(layout, 120); });
+  if (window.ResizeObserver){
+    new ResizeObserver(function(){
+      if (Math.abs(stage.clientWidth - lastW) < 4) return;
+      lastW = stage.clientWidth; layout();
+    }).observe(stage);
+  }
+  syncFields();
+  layout();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

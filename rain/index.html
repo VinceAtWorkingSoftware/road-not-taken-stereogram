@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hello, Fellow Human</title>
+<meta name="description" content="Green characters rain down a black screen while a hidden message scrolls past in 3D. Relax your eyes to read it.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&display=swap">
+<style>
+:root{ --bg:#020403; --ui:#a8e6bd; --ui-bg:rgba(8,25,13,.82); --ui-line:#1f3a27; color-scheme:dark }
+html,body{margin:0; height:100%; background:var(--bg)}
+body{display:flex; align-items:center; justify-content:center; overflow:hidden}
+canvas{display:block}
+.corner{position:fixed; right:calc(12px + env(safe-area-inset-right, 0px)); bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+  display:flex; gap:8px; opacity:.6; transition:opacity .2s}
+.corner:hover,.corner:focus-within{opacity:1}
+.corner a,.corner button{font:500 13px/1 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ui); background:var(--ui-bg);
+  border:1px solid var(--ui-line); border-radius:5px; padding:7px 10px; text-decoration:none; cursor:pointer}
+.corner a:hover,.corner button:hover{text-decoration:underline}
+.corner a:focus-visible,.corner button:focus-visible{outline:2px solid var(--ui); outline-offset:2px}
+</style>
+</head>
+<body>
+<canvas id="rain" aria-label="Green characters raining down a black screen, with the message HELLO FELLOW HUMAN. I GREET YOU! scrolling past in 3D"></canvas>
+<div class="corner">
+  <button type="button" id="fullBtn" hidden>Full screen</button>
+  <a href="https://github.com/VinceAtWorkingSoftware/road-not-taken-stereogram">Source on GitHub</a>
+</div>
+<script>
+(function(){
+  // Half-width katakana, digits and a few signs, as in classic terminal rain.
+  var GLYPHS = "ｦｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789Z:.=*+<>|".split("");
+  var PERIOD = 16;
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Fixed settings: the picture as it was shown in the editor.
+  var st = {word:"HELLO FELLOW HUMAN. I GREET YOU!", scroll:true, visible:5.5, scrollSpeed:0.5,
+            shift:4, size:14, speed:0.6, paused:reduce, mode:"wall", reveal:false, tiles:true};
+  var BG = ["#020403", "#08190d", "#0e2a16", "#153a20"];
+  var canvas = document.getElementById("rain"), ctx = canvas.getContext("2d");
+  var cw = 10, ch = 18, cols = 0, rows = 0, W = 0, H = 0, mask = [], lps = [], drops = [], t = 0;
+  var strip = [], stripCols = 0, scrollPos = 0, letterCells = 10, shownOff = -1;
+  var PAL = [];
+  for (var i = 0; i <= 15; i++){
+    if (i === 15){ PAL.push("#e8fff0"); continue; }
+    var l = i / 14;
+    PAL.push("rgb(" + Math.round(10 + 40 * l * l) + "," + Math.round(38 + 212 * l) + "," + Math.round(22 + 70 * l) + ")");
+  }
+
+  function hash(a, b, c){
+    var h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263) ^ Math.imul(c | 0, 1274126177);
+    h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  }
+
+  function layout(){
+    cw = st.size * 0.62; ch = st.size * 1.15;
+    cols = Math.max(PERIOD * 3, Math.floor((window.innerWidth - 8) / cw));
+    rows = Math.max(12, Math.floor((window.innerHeight - 8) / ch));
+    W = cols * cw; H = rows * ch;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drops = [];
+    for (var c = 0; c < cols; c++){
+      var list = [];
+      for (var k = 0; k < 2; k++){
+        var len = 6 + Math.floor(hash(c, k, 3) * 18);
+        list.push({sp:0.35 + hash(c, k, 1) * 0.9, off:hash(c, k, 2) * 997, len:len, cyc:rows + len + Math.floor(hash(c, k, 4) * rows)});
+      }
+      drops.push(list);
+    }
+    buildStrip(true); draw();
+  }
+
+  // The hidden text as a strip of heights (0 = rain, up to 1 = nearest), one cell per entry.
+  // Still: one screen wide, text centred. Scrolling: blank screen, the whole message, then a gap.
+  function buildStrip(restart){
+    var text = (st.word || "").trim() || "HELLO";
+    // Scrolling uses a tall condensed face, so 5 to 6 letters across still fill most of the height.
+    var face = st.scroll
+      ? function(sz){ return sz + 'px Impact, Haettenschweiler, "Arial Narrow Bold", "Franklin Gothic Bold", "Arial Black", sans-serif'; }
+      : function(sz){ return "900 " + sz + 'px "Arial Black", "Helvetica Neue", Arial, sans-serif'; };
+    var probe = document.createElement("canvas").getContext("2d");
+    probe.font = face(100);
+    var view = W - PERIOD * cw * 1.2, fs, textW, lead;
+    if (st.scroll){
+      var avg = runWidth(probe, text, 100) / Math.max(1, text.length);
+      fs = Math.min(H * 0.78, 100 * (view / st.visible) / avg);
+      probe.font = face(fs); textW = runWidth(probe, text, fs);
+      lead = cols;
+      stripCols = lead + Math.ceil(textW / cw) + Math.round(cols * 0.6);
+      letterCells = (avg * fs / 100) / cw;
+    } else {
+      fs = H * 0.62; probe.font = face(fs); textW = probe.measureText(text).width;
+      if (textW > view){ fs *= view / textW; probe.font = face(fs); textW = probe.measureText(text).width; }
+      stripCols = cols; lead = 0;
+    }
+    var cv = document.createElement("canvas"); cv.width = stripCols; cv.height = rows;
+    var m = cv.getContext("2d", {willReadFrequently:true});
+    m.setTransform(1 / cw, 0, 0, 1 / ch, 0, 0);
+    m.font = face(fs); m.fillStyle = "#fff"; m.textBaseline = "middle";
+    if (st.scroll) drawRun(m, text, lead * cw, H / 2, fs);
+    else { m.textAlign = "center"; m.fillText(text, W / 2, H / 2 + fs * 0.04); }
+    var data = m.getImageData(0, 0, stripCols, rows).data, x, y;
+    var d = [];
+    for (y = 0; y < rows; y++){
+      var r = new Float32Array(stripCols);
+      for (x = 0; x < stripCols; x++) r[x] = data[(y * stripCols + x) * 4 + 3] > 110 ? 99 : 0;
+      d.push(r);
+    }
+    function at(yy, xx){ return yy < 0 || yy >= rows || xx < 0 || xx >= stripCols ? 0 : d[yy][xx]; }
+    for (y = 0; y < rows; y++) for (x = 0; x < stripCols; x++) if (d[y][x]) d[y][x] = Math.min(d[y][x], at(y, x-1) + 1, at(y-1, x) + 1);
+    for (y = rows - 1; y >= 0; y--) for (x = stripCols - 1; x >= 0; x--) if (d[y][x]) d[y][x] = Math.min(d[y][x], at(y, x+1) + 1, at(y+1, x) + 1);
+    strip = d.map(function(r){ return r.map(function(v){ return v ? 0.7 + 0.3 * Math.min(1, (v - 1) / 2) : 0; }); });
+    if (restart || !st.scroll) scrollPos = st.scroll ? cols * 0.45 : 0;
+    scrollPos = scrollPos % stripCols;
+    shownOff = -1; updateWindow();
+  }
+
+  // Scrolling text is set letter by letter, so the L can get a longer, thicker foot:
+  // the condensed face's own L foot is too short to survive in depth and reads like an I.
+  var L_EXTRA = 0.2;
+  function runWidth(c2d, text, fs){
+    var w = 0;
+    for (var i = 0; i < text.length; i++) w += c2d.measureText(text[i]).width + (text[i] === "L" ? L_EXTRA * fs : 0);
+    return w;
+  }
+  function drawRun(c2d, text, x, cy, fs){
+    c2d.textAlign = "left"; c2d.textBaseline = "alphabetic";
+    var capH = c2d.measureText("H").actualBoundingBoxAscent || fs * 0.79;
+    var base = cy + capH / 2;
+    for (var i = 0; i < text.length; i++){
+      var chr = text[i], mm = c2d.measureText(chr);
+      c2d.fillText(chr, x, base);
+      if (chr === "L"){
+        var left = x - (mm.actualBoundingBoxLeft || 0);
+        var right = x + (mm.actualBoundingBoxRight || mm.width) + L_EXTRA * fs;
+        var foot = capH * 0.24;
+        c2d.fillRect(left, base - foot, right - left, foot);
+        x += L_EXTRA * fs;
+      }
+      x += mm.width;
+    }
+  }
+
+  // Copy the visible part of the strip into the mask, and relink the rows when it moved.
+  function updateWindow(){
+    var off = st.scroll ? Math.floor(scrollPos) % stripCols : 0;
+    if (off === shownOff) return false;
+    shownOff = off; mask = [];
+    for (var y = 0; y < rows; y++){
+      var row = new Float32Array(cols), s = strip[y];
+      for (var x = 0; x < cols; x++) row[x] = s[(x + off) % stripCols];
+      mask.push(row);
+    }
+    link();
+    return true;
+  }
+
+  // Each point ties together the two cells its eyes see. Every cell gets at most one partner on each
+  // side, so the links form chains running left to right; clashing links at depth steps are skipped.
+  function link(){
+    lps = [];
+    for (var y = 0; y < rows; y++){
+      var lp = new Int32Array(cols).fill(-1), rp = new Int32Array(cols).fill(-1);
+      for (var x = 0; x < cols; x++){
+        var dd = Math.round(mask[y][x] * st.shift);
+        var sep = st.mode === "wall" ? PERIOD - dd : PERIOD + dd;
+        var left = x - (sep >> 1), right = left + sep;
+        if (left < 0 || right >= cols || rp[left] !== -1 || lp[right] !== -1) continue;
+        rp[left] = right; lp[right] = left;
+      }
+      lps.push(lp);
+    }
+  }
+
+  // The rain at a cell: a still background tile, a dim glow, and two falling streaks per column.
+  function field(c, y){
+    var lvl = 2 + Math.floor(hash(c, y, 7) * 6), head = false, list = drops[c];
+    for (var k = 0; k < list.length; k++){
+      var dr = list[k], pos = (t * dr.sp + dr.off) % dr.cyc, dist = pos - y;
+      if (dist >= 0 && dist < dr.len){
+        if (dist < 1) head = true;
+        var v = Math.round(14 * (1 - dist / dr.len));
+        if (v > lvl) lvl = v;
+      }
+    }
+    if (head) lvl = 15;
+    var rate = head ? 0.8 : 0.015 + hash(c, y, 5) * 0.035;
+    var gi = Math.floor(hash(c, y, Math.floor(t * rate + hash(c, y, 9) * 50)) * GLYPHS.length);
+    var bg = Math.floor(hash(c, y, 11) * 4);
+    return (bg * 16 + lvl) * 64 + gi;
+  }
+
+  function draw(){
+    ctx.fillStyle = "#020403"; ctx.fillRect(0, 0, W, H);
+    ctx.font = "500 " + st.size + 'px "JetBrains Mono", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "MS Gothic", monospace';
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    var vals = new Int32Array(cols);
+    for (var y = 0; y < rows; y++){
+      var lp = lps[y], cy = y * ch + ch / 2 + 1;
+      for (var x = 0; x < cols; x++){
+        var v = lp[x] >= 0 ? vals[lp[x]] : field(x, y);
+        vals[x] = v;
+        if (st.reveal && mask[y][x] > 0){ ctx.fillStyle = "#1d5a7a"; ctx.fillRect(x * cw, y * ch, cw, ch); }
+        else if (st.tiles && (v >> 10)){ ctx.fillStyle = BG[v >> 10]; ctx.fillRect(x * cw, y * ch, cw + 0.5, ch + 0.5); }
+        ctx.fillStyle = PAL[(v >> 6) & 15];
+        ctx.fillText(GLYPHS[v & 63], x * cw + cw / 2, cy);
+      }
+    }
+  }
+
+  var last = 0;
+  function tick(ts){
+    requestAnimationFrame(tick);
+    var dt = Math.min(200, ts - last);
+    if (st.paused || document.hidden){ last = ts; return; }
+    if (dt < 50) return;
+    last = ts;
+    var changed = false;
+    if (st.speed > 0){ t += st.speed * dt / 1000 * 14; changed = true; }
+    if (st.scroll && st.scrollSpeed > 0){
+      scrollPos = (scrollPos + st.scrollSpeed * letterCells * dt / 1000) % stripCols;
+      if (updateWindow()) changed = true;
+    }
+    if (changed) draw();
+  }
+
+  var fullBtn = document.getElementById("fullBtn");
+  if (document.fullscreenEnabled && document.documentElement.requestFullscreen){
+    fullBtn.hidden = false;
+    fullBtn.addEventListener("click", function(){
+      try {
+        if (document.fullscreenElement) document.exitFullscreen().catch(function(){});
+        else document.documentElement.requestFullscreen().catch(function(){});
+      } catch (e) {}
+    });
+    document.addEventListener("fullscreenchange", function(){
+      fullBtn.textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+    });
+  }
+
+  var timer = null;
+  window.addEventListener("resize", function(){ clearTimeout(timer); timer = setTimeout(layout, 120); });
+  layout();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

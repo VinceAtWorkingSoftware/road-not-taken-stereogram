@@ -11,6 +11,17 @@ Pick one of five poems or paste your own text, choose a hidden picture (or type 
 and adjust colours, letter size, depth and viewing method. It also has a full-screen and a
 picture-only mode.
 
+## Hello, fellow human
+
+Green characters rain down a black screen while a hidden message scrolls past in 3D, a few letters
+at a time. Every frame is a complete stereogram, so the letters stay in depth while the rain falls.
+
+**See it:** https://vinceatworkingsoftware.github.io/road-not-taken-stereogram/rain/
+
+**Build your own:** https://vinceatworkingsoftware.github.io/road-not-taken-stereogram/rain/builder/  
+Type any word or message, choose still or scrolling, and adjust letters on screen, scroll speed,
+depth, letter size, rain speed and viewing method.
+
 ## How to see the picture
 
 1. Move your face close to the screen, so everything is blurry.
@@ -24,8 +35,10 @@ letter. Where the hidden scene stands out, the repeat is a few letters shorter. 
 lines up a different copy, and the brain reads the shorter repeat as nearer. The first
 repeat on the left is kept flat, so the poem always reads cleanly down the left edge.
 
-Plain HTML and JavaScript, no build step: [`index.html`](index.html) is the picture,
-[`builder/index.html`](builder/index.html) the builder.
+Plain HTML and JavaScript, no build step: [`index.html`](index.html) and
+[`builder/index.html`](builder/index.html) are the poem picture and its builder,
+[`rain/index.html`](rain/index.html) and [`rain/builder/index.html`](rain/builder/index.html)
+the rain picture and its builder.
 
 ## The poems
 

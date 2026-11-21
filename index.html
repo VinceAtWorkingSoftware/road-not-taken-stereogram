@@ -22,15 +22,20 @@ pre#grid{margin:0; font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,mono
 .g4{background:var(--t4)} .g5{background:var(--t5)} .g6{background:var(--t6)} .g7{background:var(--t7)}
 .g4,.g5,.g6,.g7{color:var(--ink-light)}
 .probe{position:absolute; visibility:hidden; white-space:pre; font:700 15px "JetBrains Mono",ui-monospace,Menlo,Consolas,monospace}
-a.source{position:fixed; right:calc(12px + env(safe-area-inset-right, 0px)); bottom:calc(10px + env(safe-area-inset-bottom, 0px));
-  font:500 13px/1 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--link); text-decoration:none;
-  background:rgba(255,255,255,.75); padding:7px 10px; border-radius:5px}
-a.source:hover,a.source:focus-visible{text-decoration:underline}
+.corner{position:fixed; right:calc(12px + env(safe-area-inset-right, 0px)); bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+  display:flex; gap:8px}
+.corner a,.corner button{font:500 13px/1 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--link); text-decoration:none;
+  background:rgba(255,255,255,.75); border:0; padding:7px 10px; border-radius:5px; cursor:pointer}
+.corner a:hover,.corner button:hover{text-decoration:underline}
+.corner a:focus-visible,.corner button:focus-visible{outline:2px solid var(--link); outline-offset:2px}
 </style>
 </head>
 <body>
 <pre id="grid" aria-label="The Road Not Taken by Robert Frost, written as a stereogram hiding a forking path, a signpost, a tree and a mountain"></pre>
-<a class="source" href="https://github.com/VinceAtWorkingSoftware/road-not-taken-stereogram">Source on GitHub</a>
+<div class="corner">
+  <button type="button" id="fullBtn" hidden>Full screen</button>
+  <a href="https://github.com/VinceAtWorkingSoftware/road-not-taken-stereogram">Source on GitHub</a>
+</div>
 <span class="probe" id="probe">MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM</span>
 <script>
 (function(){
@@ -363,6 +368,20 @@ a.source:hover,a.source:focus-visible{text-decoration:underline}
       out.push(line);
     }
     document.getElementById("grid").innerHTML = out.join("\n");
+  }
+
+  var fullBtn = document.getElementById("fullBtn");
+  if (document.fullscreenEnabled && document.documentElement.requestFullscreen){
+    fullBtn.hidden = false;
+    fullBtn.addEventListener("click", function(){
+      try {
+        if (document.fullscreenElement) document.exitFullscreen().catch(function(){});
+        else document.documentElement.requestFullscreen().catch(function(){});
+      } catch (e) {}
+    });
+    document.addEventListener("fullscreenchange", function(){
+      fullBtn.textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+    });
   }
 
   var timer = null;
