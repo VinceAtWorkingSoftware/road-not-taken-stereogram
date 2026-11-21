@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Road Not Taken</title>
+<meta name="description" content="Robert Frost's The Road Not Taken, written as a stereogram: relax your eyes and a forking path, a signpost, a tree and a mountain appear in 3D.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&display=swap">
+<style>
+:root{
+  --page:#e7e4dd; --link:#4f4b45;
+  --t0:#ece7dc; --t1:#d3d9cc; --t2:#bcc6cf; --t3:#cbb9a8; --t4:#7d6f61; --t5:#5d6b62; --t6:#4b5866; --t7:#33302c;
+  --ink-dark:#1b1d20; --ink-light:#f3efe7;
+}
+html,body{margin:0; height:100%; background:var(--page)}
+body{display:flex; align-items:center; justify-content:center; overflow:hidden}
+pre#grid{margin:0; font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-weight:700;
+  font-size:15px; line-height:1.12; color:var(--ink-dark); user-select:none}
+.g0{background:var(--t0)} .g1{background:var(--t1)} .g2{background:var(--t2)} .g3{background:var(--t3)}
+.g4{background:var(--t4)} .g5{background:var(--t5)} .g6{background:var(--t6)} .g7{background:var(--t7)}
+.g4,.g5,.g6,.g7{color:var(--ink-light)}
+.probe{position:absolute; visibility:hidden; white-space:pre; font:700 15px "JetBrains Mono",ui-monospace,Menlo,Consolas,monospace}
+a.source{position:fixed; right:calc(12px + env(safe-area-inset-right, 0px)); bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+  font:500 13px/1 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--link); text-decoration:none;
+  background:rgba(255,255,255,.75); padding:7px 10px; border-radius:5px}
+a.source:hover,a.source:focus-visible{text-decoration:underline}
+</style>
+</head>
+<body>
+<pre id="grid" aria-label="The Road Not Taken by Robert Frost, written as a stereogram hiding a forking path, a signpost, a tree and a mountain"></pre>
+<a class="source" href="https://github.com/VinceAtWorkingSoftware/road-not-taken-stereogram">Source on GitHub</a>
+<span class="probe" id="probe">MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM</span>
+<script>
+(function(){
+  // Fixed settings: the picture as it was shown in the editor.
+  var POEMS = {
+    road: {title:"The Road Not Taken", author:"Robert Frost, 1916", text:
+"Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrowth;\n\nThen took the other, as just as fair,\nAnd having perhaps the better claim,\nBecause it was grassy and wanted wear;\nThough as for that the passing there\nHad worn them really about the same,\n\nAnd both that morning equally lay\nIn leaves no step had trodden black.\nOh, I kept the first for another day!\nYet knowing how way leads on to way,\nI doubted if I should ever come back.\n\nI shall be telling this with a sigh\nSomewhere ages and ages hence:\nTwo roads diverged in a wood, and I-\nI took the one less traveled by,\nAnd that has made all the difference."},
+  };
+  var state = {source:"poem", poem:"road", text:"", shape:"poem", word:"", mode:"wall", shift:5, seed:20261121};
+  var PERIOD = 24, SIZE = 15;
+  var cw = 9, lh = SIZE * 1.12, cols = 0, rows = 0, chars = [], tones = [], mask = [], bgMask = [], poemLines = [];
+  var POEM_SHAPE = {road:"fork"};
+  function currentShape(){ return "fork"; }
+
+  // A scene is a list of parts. Each part is drawn in white; its cells get a height between 0 (page) and 1 (nearest).
+  //   h: height, or fn(px, py, g) for a height that varies over the part
+  //   round: how far in from the edge (as a share of S) the surface keeps rising, giving it a rounded, domed form
+  //   mode: "max" (default) stands up from the page, "lift" adds on top, "carve" presses in
+  //   ramp: [top, bottom] tilts the whole ground so it comes towards you at the bottom
+  // Coordinates are in units of S, the size of the picture, around its centre.
+  function X(g, u){ return g.cx + u * g.S; }
+  function Y(g, v){ return g.cy + v * g.S; }
+  function circ(ctx, g, u, v, r){ ctx.beginPath(); ctx.arc(X(g, u), Y(g, v), r * g.S, 0, Math.PI * 2); ctx.fill(); }
+  function ell(ctx, g, u, v, rx, ry, rot){ ctx.beginPath(); ctx.ellipse(X(g, u), Y(g, v), rx * g.S, ry * g.S, rot || 0, 0, Math.PI * 2); ctx.fill(); }
+  function poly(ctx, g, pts){
+    ctx.beginPath();
+    for (var i = 0; i < pts.length; i += 2) ctx[i ? "lineTo" : "moveTo"](X(g, pts[i]), Y(g, pts[i+1]));
+    ctx.closePath(); ctx.fill();
+  }
+  function strokes(ctx, g, w, lines){
+    ctx.lineWidth = w * g.S;
+    lines.forEach(function(p){
+      ctx.beginPath(); ctx.moveTo(X(g, p[0]), Y(g, p[1]));
+      if (p.length === 4) ctx.lineTo(X(g, p[2]), Y(g, p[3]));
+      else ctx.quadraticCurveTo(X(g, p[2]), Y(g, p[3]), X(g, p[4]), Y(g, p[5]));
+      ctx.stroke();
+    });
+  }
+  function curve(ctx, g, pts){
+    ctx.beginPath(); ctx.moveTo(X(g, pts[0]), Y(g, pts[1]));
+    for (var i = 2; i < pts.length; i += 6)
+      ctx.bezierCurveTo(X(g, pts[i]), Y(g, pts[i+1]), X(g, pts[i+2]), Y(g, pts[i+3]), X(g, pts[i+4]), Y(g, pts[i+5]));
+    ctx.closePath(); ctx.fill();
+  }
+  function flower(ctx, g, u, v, s){
+    for (var k = 0; k < 6; k++){
+      var a = -Math.PI / 2 + k * Math.PI / 3;
+      ell(ctx, g, u + Math.cos(a) * .19 * s, v + Math.sin(a) * .19 * s, .17 * s, .09 * s, a);
+    }
+  }
+
+  var SCENES = {
+    heart: function(){ return [{h:1, round:.16, draw:function(ctx, g){
+      var s = g.S / 33;
+      ctx.beginPath();
+      for (var i = 0; i <= 200; i++){
+        var t = i / 200 * Math.PI * 2;
+        var x = 16 * Math.pow(Math.sin(t), 3);
+        var y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+        ctx[i ? "lineTo" : "moveTo"](g.cx + x * s, g.cy - (y + 2.5) * s);
+      }
+      ctx.fill();
+    }}]; },
+    star: function(){ return [{h:1, round:.12, draw:function(ctx, g){
+      var pts = [];
+      for (var k = 0; k < 10; k++){
+        var a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? .22 : .49;
+        pts.push(Math.cos(a) * r, .05 + Math.sin(a) * r);
+      }
+      poly(ctx, g, pts);
+    }}]; },
+    word: function(){ return [{h:1, round:.05, draw:function(ctx, g){
+      var text = (state.word || "").trim().toUpperCase() || "HI";
+      var face = function(sz){ return "900 " + sz + 'px "Arial Black", "Helvetica Neue", Arial, sans-serif'; };
+      var fs = g.S * 0.8; ctx.font = face(fs);
+      var w = ctx.measureText(text).width, room = Math.max(10, g.half * 2);
+      if (w > room){ fs *= room / w; ctx.font = face(fs); }
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(text, g.cx, g.cy + fs * 0.04);
+    }}]; },
+
+    // The Road Not Taken: a narrow path up the middle that forks at a signpost, one branch climbing
+    // into the distance, one running right to the foot of a mountain; a big tree on the left.
+    fork: function(){ return [
+      // Mountain and tree crown keep their edges high (floor), so the path disappears behind them.
+      {h:.9, round:.18, floor:.6, draw:function(ctx, g){
+        poly(ctx, g, [.18,.2, .3,-.24, .36,-.17, .48,-.43, .6,-.15, .65,-.19, .77,.2]);
+      }},
+      {h:.35, draw:function(ctx, g){
+        strokes(ctx, g, .21, [[0,.55, .04,.3, 0,.12]]);
+        strokes(ctx, g, .13, [[0,.12, -.12,.02, -.32,-.06], [0,.12, .16,.05, .34,-.08]]);
+      }},
+      {h:.75, round:.02, draw:function(ctx, g){ poly(ctx, g, [.02,.11, .05,.11, .05,-.25, .02,-.25]); }},
+      {h:.85, draw:function(ctx, g){
+        poly(ctx, g, [.05,-.235, -.09,-.235, -.13,-.195, -.09,-.155, .05,-.155]);
+        poly(ctx, g, [.02,-.13, .19,-.13, .23,-.09, .19,-.05, .02,-.05]);
+      }},
+      {h:.7, round:.02, draw:function(ctx, g){ poly(ctx, g, [-.385,-.03, -.325,-.03, -.31,.36, -.4,.36]); }},
+      {h:1, round:.12, floor:.6, draw:function(ctx, g){
+        circ(ctx, g, -.36, -.18, .18); circ(ctx, g, -.46, -.06, .11); circ(ctx, g, -.27, -.31, .1); circ(ctx, g, -.44, -.31, .09);
+      }}
+    ]; },
+
+    // The Tyger: a domed face with ears, a raised muzzle and nose, pressed-in eyes and stripes.
+    tiger: function(){ return [
+      {h:.75, round:.18, draw:function(ctx, g){ ell(ctx, g, 0, .06, .37, .32); }},
+      {h:.68, round:.05, draw:function(ctx, g){
+        poly(ctx, g, [-.37,-.1, -.31,-.4, -.12,-.25]); poly(ctx, g, [.37,-.1, .31,-.4, .12,-.25]); }},
+      {mode:"carve", h:.25, draw:function(ctx, g){
+        poly(ctx, g, [-.32,-.16, -.29,-.32, -.19,-.23]); poly(ctx, g, [.32,-.16, .29,-.32, .19,-.23]); }},
+      {mode:"lift", h:.2, round:.07, draw:function(ctx, g){ ell(ctx, g, -.075, .19, .12, .095); ell(ctx, g, .075, .19, .12, .095); }},
+      {mode:"lift", h:.15, draw:function(ctx, g){ poly(ctx, g, [-.07,.06, .07,.06, 0,.14]); }},
+      {mode:"carve", h:.45, draw:function(ctx, g){ ell(ctx, g, -.15, -.04, .08, .042, .25); ell(ctx, g, .15, -.04, .08, .042, -.25); }},
+      {mode:"carve", h:.3, draw:function(ctx, g){
+        strokes(ctx, g, .036, [[0,-.25, 0,-.14], [-.09,-.24, -.065,-.15], [.09,-.24, .065,-.15],
+          [-.37,.02, -.23,.05], [-.36,.13, -.23,.13], [-.33,.23, -.22,.2],
+          [.37,.02, .23,.05], [.36,.13, .23,.13], [.33,.23, .22,.2], [0,.14, 0,.22]]);
+      }}
+    ]; },
+
+    flame: function(){ return [
+      {h:.6, round:.12, draw:function(ctx, g){ curve(ctx, g, [0,.46, -.32,.46, -.38,.12, -.22,-.08, -.12,-.2, -.04,-.3, .02,-.5,
+        .08,-.3, .2,-.26, .16,-.1, .24,-.18, .27,-.24, .3,-.32, .42,-.08, .36,.46, 0,.46]); }},
+      {h:1, round:.08, draw:function(ctx, g){ curve(ctx, g, [0,.42, -.17,.42, -.19,.2, -.09,.05, -.04,-.03, 0,-.1, .02,-.2,
+        .09,-.05, .2,.1, .16,.26, .13,.38, .06,.42, 0,.42]); }}
+    ]; },
+
+    // Daffodils: one large flower with a hollow trumpet, a stem and leaves, two smaller flowers behind.
+    daffodil: function(){ return [
+      {h:.32, round:.04, draw:function(ctx, g){ flower(ctx, g, -.38, .22, .45); flower(ctx, g, .39, .27, .45); }},
+      {h:.48, round:.02, draw:function(ctx, g){ circ(ctx, g, -.38, .22, .045); circ(ctx, g, .39, .27, .045); }},
+      {h:.38, round:.02, draw:function(ctx, g){ strokes(ctx, g, .05, [[0,-.12, .04,.25, -.02,.5]]); }},
+      {h:.42, round:.04, draw:function(ctx, g){ ell(ctx, g, .13, .32, .15, .045, -.9); ell(ctx, g, -.1, .37, .13, .04, .9); }},
+      {h:.62, round:.08, draw:function(ctx, g){ flower(ctx, g, 0, -.12, 1); }},
+      {h:1, round:.05, draw:function(ctx, g){ circ(ctx, g, 0, -.12, .125); }},
+      {mode:"carve", h:.4, round:.03, draw:function(ctx, g){ circ(ctx, g, 0, -.12, .07); }}
+    ]; },
+
+    // Sonnet 18: rays that slope down away from a domed sun with a face.
+    sun: function(){ return [
+      {fn:function(px, py, g){ var r = Math.hypot(px - g.cx, py - g.cy) / g.S; return Math.max(.18, .75 - (r - .27) * 2.2); },
+       draw:function(ctx, g){
+        for (var k = 0; k < 12; k++){
+          var a = k * Math.PI / 6;
+          poly(ctx, g, [Math.cos(a - .17) * .27, Math.sin(a - .17) * .27, Math.cos(a) * .49, Math.sin(a) * .49,
+                        Math.cos(a + .17) * .27, Math.sin(a + .17) * .27]);
+        }
+      }},
+      {h:1, round:.26, draw:function(ctx, g){ circ(ctx, g, 0, 0, .27); }},
+      {mode:"carve", h:.25, draw:function(ctx, g){
+        circ(ctx, g, -.09, -.06, .035); circ(ctx, g, .09, -.06, .035);
+        ctx.lineWidth = .03 * g.S; ctx.beginPath(); ctx.arc(g.cx, g.cy + .01 * g.S, .12 * g.S, .2 * Math.PI, .8 * Math.PI); ctx.stroke();
+      }}
+    ]; },
+
+    // Stopping by Woods: tilted snowy ground, a layered pine with trunk, small trees behind, falling flakes.
+    tree: function(){ return [
+      {h:.4, round:.03, draw:function(ctx, g){
+        poly(ctx, g, [-.45,-.3, -.55,.05, -.35,.05]); poly(ctx, g, [.46,-.25, .36,.1, .56,.1]); }},
+      {h:.55, round:.02, draw:function(ctx, g){ poly(ctx, g, [-.06,.3, .06,.3, .06,.5, -.06,.5]); }},
+      {h:1, round:.06, draw:function(ctx, g){ poly(ctx, g, [0,-.12, -.42,.33, .42,.33]); }},
+      {h:.9, round:.06, draw:function(ctx, g){ poly(ctx, g, [0,-.33, -.3,.07, .3,.07]); }},
+      {h:.8, round:.06, draw:function(ctx, g){ poly(ctx, g, [0,-.5, -.18,-.19, .18,-.19]); }},
+      {h:.95, draw:function(ctx, g){
+        [[-.3,-.42], [.3,-.44], [-.48,-.08], [.47,-.02], [.27,-.2], [-.25,-.2]].forEach(function(p){ circ(ctx, g, p[0], p[1], .035); });
+      }}
+    ]; }
+  };
+
+  var CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+  function rng(seed){
+    return function(){
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // Split a poem line into phrases that fit one repeat, breaking between words.
+  function wrapLine(line, width){
+    var out = [], cur = "";
+    line.split(" ").forEach(function(w){
+      while (w.length > width){ if (cur){ out.push(cur); cur = ""; } out.push(w.slice(0, width)); w = w.slice(width); }
+      if (!cur) cur = w;
+      else if (cur.length + 1 + w.length <= width) cur += " " + w;
+      else { out.push(cur); cur = w; }
+    });
+    out.push(cur);
+    return out;
+  }
+
+  function buildPoem(){
+    var p = POEMS.road, lines = [];
+    [p.title, p.author, ""].concat(p.text.split("\n")).forEach(function(l){ lines = lines.concat(wrapLine(l.trim(), PERIOD - 2)); });
+    return lines;
+  }
+
+  // The poem line for a row; a short poem starts again after a blank line.
+  function lineFor(y){
+    if (y === 0 || !poemLines.length) return "";
+    var i = (y - 1) % (poemLines.length + 1);
+    return i < poemLines.length ? poemLines[i] : "";
+  }
+
+  // Distance from each cell inside a part to the nearest cell outside it, in pixels.
+  function edgeDistance(inside){
+    var INF = 1e9, dg = Math.hypot(cw, lh), d = [], x, y;
+    for (y = 0; y < rows; y++){ d.push([]); for (x = 0; x < cols; x++) d[y].push(inside[y][x] ? INF : 0); }
+    function at(yy, xx){ return yy < 0 || yy >= rows || xx < 0 || xx >= cols ? 0 : d[yy][xx]; }
+    for (y = 0; y < rows; y++) for (x = 0; x < cols; x++) if (d[y][x])
+      d[y][x] = Math.min(d[y][x], at(y, x-1) + cw, at(y-1, x) + lh, at(y-1, x-1) + dg, at(y-1, x+1) + dg);
+    for (y = rows - 1; y >= 0; y--) for (x = cols - 1; x >= 0; x--) if (d[y][x])
+      d[y][x] = Math.min(d[y][x], at(y, x+1) + cw, at(y+1, x) + lh, at(y+1, x+1) + dg, at(y+1, x-1) + dg);
+    return d;
+  }
+
+  // Builds the height of every cell (0 = page, 1 = nearest) from the current scene.
+
+  // Distance from each cell inside a part to the nearest cell outside it, in pixels.
+  function edgeDistance(inside){
+    var INF = 1e9, dg = Math.hypot(cw, lh), d = [], x, y;
+    for (y = 0; y < rows; y++){ d.push([]); for (x = 0; x < cols; x++) d[y].push(inside[y][x] ? INF : 0); }
+    function at(yy, xx){ return yy < 0 || yy >= rows || xx < 0 || xx >= cols ? 0 : d[yy][xx]; }
+    for (y = 0; y < rows; y++) for (x = 0; x < cols; x++) if (d[y][x])
+      d[y][x] = Math.min(d[y][x], at(y, x-1) + cw, at(y-1, x) + lh, at(y-1, x-1) + dg, at(y-1, x+1) + dg);
+    for (y = rows - 1; y >= 0; y--) for (x = cols - 1; x >= 0; x--) if (d[y][x])
+      d[y][x] = Math.min(d[y][x], at(y, x+1) + cw, at(y+1, x) + lh, at(y+1, x+1) + dg, at(y+1, x-1) + dg);
+    return d;
+  }
+
+  // Builds the height of every cell (0 = page, 1 = nearest) from the current scene.
+  function buildMask(){
+    var W = cols * cw, H = rows * lh;
+    var poem = state.source === "poem";
+    // Centre the scene on the whole picture; size it so it stays clear of the flat reading strip on the left.
+    var leftLimit = poem ? (Math.ceil(PERIOD * 1.5) + 1) * cw : PERIOD * cw * 0.5;
+    var half = W / 2 - leftLimit;
+    var g = {cx:W / 2, cy:H / 2, S:Math.max(10, Math.min(H * 0.95, 2 * half / 1.1)), W:W, H:H, half:half};
+    var cv = document.createElement("canvas"); cv.width = cols; cv.height = rows;
+    var ctx = cv.getContext("2d", {willReadFrequently:true});
+    var x, y;
+    mask = []; bgMask = [];
+    for (y = 0; y < rows; y++){ mask.push(new Array(cols).fill(0)); bgMask.push(new Array(cols).fill(0)); }
+    var scene = (SCENES[currentShape()] || SCENES.heart)();
+    scene.forEach(function(p){
+      if (p.ramp){
+        for (y = 0; y < rows; y++){
+          var v = p.ramp[0] + (p.ramp[1] - p.ramp[0]) * (y + 0.5) / rows;
+          for (x = 0; x < cols; x++){ bgMask[y][x] = Math.max(bgMask[y][x], v); mask[y][x] = Math.max(mask[y][x], v); }
+        }
+        return;
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cols, rows);
+      ctx.setTransform(1 / cw, 0, 0, 1 / lh, 0, 0);
+      ctx.fillStyle = ctx.strokeStyle = "#fff"; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      p.draw(ctx, g);
+      var data = ctx.getImageData(0, 0, cols, rows).data, inside = [];
+      for (y = 0; y < rows; y++){ inside.push([]); for (x = 0; x < cols; x++) inside[y].push(data[(y * cols + x) * 4 + 3] > 110); }
+      var dist = p.round ? edgeDistance(inside) : null;
+      for (y = 0; y < rows; y++) for (x = 0; x < cols; x++){
+        if (!inside[y][x]) continue;
+        var prof = 1;
+        if (dist){
+          var t = Math.min(1, dist[y][x] / (p.round * g.S)), fl = p.floor != null ? p.floor : 0.35;
+          prof = fl + (1 - fl) * Math.sqrt(1 - (1 - t) * (1 - t));
+        }
+        var val = (p.fn ? p.fn((x + 0.5) * cw, (y + 0.5) * lh, g) : p.h) * prof;
+        if (p.mode === "lift") mask[y][x] += val;
+        else if (p.mode === "carve") mask[y][x] -= val;
+        else mask[y][x] = Math.max(mask[y][x], val);
+      }
+    });
+    // With a poem, keep the first repeat and half the next one flat, so nothing shifts the left edge.
+    var keep = poem ? Math.ceil(PERIOD * 1.5) + 1 : 0;
+    for (y = 0; y < rows; y++) for (x = 0; x < cols; x++){
+      if (x < keep){ mask[y][x] = 0; bgMask[y][x] = 0; }
+      else mask[y][x] = Math.max(0, Math.min(1, mask[y][x]));
+    }
+  }
+
+  // Each point on the surface ties together the two cells its left and right eye see, centred on
+  // the point. Every cell gets at most one partner on each side, so the links form simple chains
+  // running left to right. Where a new link would clash with an existing one (at a depth step), it is skipped.
+  function linkRow(y){
+    var lp = new Array(cols).fill(-1), rp = new Array(cols).fill(-1), x;
+    var maxShift = Math.min(state.shift, Math.floor(PERIOD / 3));
+    for (x = 0; x < cols; x++){
+      var d = Math.round(mask[y][x] * maxShift);
+      var sep = state.mode === "wall" ? PERIOD - d : PERIOD + d;
+      var left = x - (sep >> 1), right = left + sep;
+      if (left < 0 || right >= cols || rp[left] !== -1 || lp[right] !== -1) continue;
+      rp[left] = right; lp[right] = left;
+    }
+    return lp;
+  }
+
+  // A cell with no partner on its left starts a chain and gets fresh content; every other cell
+  // copies its left partner, so letters and tile colours repeat together. Chains start at the
+  // left edge, so the first repeat on the left reads as clean text.
+  function generate(){
+    var rand = rng(state.seed);
+    chars = []; tones = [];
+    for (var y = 0; y < rows; y++){
+      var lp = linkRow(y), row = new Array(cols), tone = new Array(cols), x;
+      var phrase = state.source === "poem" ? lineFor(y) : "";
+      while (phrase.length < PERIOD) phrase += " ";
+      for (x = 0; x < cols; x++){
+        if (lp[x] >= 0){ row[x] = row[lp[x]]; tone[x] = tone[lp[x]]; }
+        else if (state.source === "poem"){ row[x] = phrase[x % PERIOD]; tone[x] = Math.floor(rand() * 8); }
+        else { row[x] = CHARS[Math.floor(rand() * CHARS.length)]; tone[x] = row[x].charCodeAt(0) % 8; }
+      }
+      chars.push(row); tones.push(tone);
+    }
+  }
+
+  function esc(c){ return c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === "&" ? "&amp;" : c; }
+
+  function draw(){
+    cw = document.getElementById("probe").getBoundingClientRect().width / 40;
+    cols = Math.max(PERIOD * 3, Math.min(260, Math.floor((window.innerWidth - 24) / cw)));
+    rows = Math.max(16, Math.floor((window.innerHeight - 56) / lh));
+    poemLines = buildPoem();
+    buildMask(); generate();
+    var out = [];
+    for (var y = 0; y < rows; y++){
+      var line = "";
+      for (var x = 0; x < cols; x++) line += '<span class="g' + tones[y][x] + '">' + esc(chars[y][x]) + "</span>";
+      out.push(line);
+    }
+    document.getElementById("grid").innerHTML = out.join("\n");
+  }
+
+  var timer = null;
+  window.addEventListener("resize", function(){ clearTimeout(timer); timer = setTimeout(draw, 150); });
+  draw();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+})();
+</script>
+</body>
+</html>
