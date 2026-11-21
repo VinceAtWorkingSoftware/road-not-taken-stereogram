@@ -9,9 +9,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&display=swap">
 <style>
-:root{ --bg:#020403; --ui:#a8e6bd; --ui-bg:rgba(8,25,13,.82); --ui-line:#1f3a27; color-scheme:dark }
+:root{ --dot:#a8ffc4; --bg:#020403; --ui:#a8e6bd; --ui-bg:rgba(8,25,13,.82); --ui-line:#1f3a27; color-scheme:dark }
 html,body{margin:0; height:100%; background:var(--bg)}
 body{display:flex; align-items:center; justify-content:center; overflow:hidden}
+.guides{position:relative; height:26px; margin-bottom:10px}
+.guides span{position:absolute; top:4px; width:16px; height:16px; border-radius:50%; background:var(--dot)}
 canvas{display:block}
 .corner{position:fixed; right:calc(12px + env(safe-area-inset-right, 0px)); bottom:calc(10px + env(safe-area-inset-bottom, 0px));
   display:flex; gap:8px; opacity:.6; transition:opacity .2s}
@@ -23,7 +25,10 @@ canvas{display:block}
 </style>
 </head>
 <body>
+<div class="inner">
+<div class="guides" id="guides" aria-hidden="true"><span></span><span></span></div>
 <canvas id="rain" aria-label="Green characters raining down a black screen, with the message HELLO FELLOW HUMAN. I GREET YOU! scrolling past in 3D"></canvas>
+</div>
 <div class="corner">
   <button type="button" id="fullBtn" hidden>Full screen</button>
   <a href="https://github.com/VinceAtWorkingSoftware/road-not-taken-stereogram">Source on GitHub</a>
@@ -57,12 +62,16 @@ canvas{display:block}
   function layout(){
     cw = st.size * 0.62; ch = st.size * 1.15;
     cols = Math.max(PERIOD * 3, Math.floor((window.innerWidth - 8) / cw));
-    rows = Math.max(12, Math.floor((window.innerHeight - 8) / ch));
+    rows = Math.max(12, Math.floor((window.innerHeight - 8 - 36) / ch));
     W = cols * cw; H = rows * ch;
     var dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     canvas.style.width = W + "px"; canvas.style.height = H + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var gd = document.getElementById("guides"), gap = PERIOD * cw, GW = cols * cw;
+    gd.style.width = GW + "px";
+    gd.children[0].style.left = (GW / 2 - gap / 2 - 8) + "px";
+    gd.children[1].style.left = (GW / 2 + gap / 2 - 8) + "px";
     drops = [];
     for (var c = 0; c < cols; c++){
       var list = [];

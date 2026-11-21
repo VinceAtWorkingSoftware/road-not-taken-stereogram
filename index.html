@@ -10,12 +10,14 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&display=swap">
 <style>
 :root{
-  --page:#e7e4dd; --link:#4f4b45;
+  --page:#e7e4dd; --link:#4f4b45; --dot:#33302c;
   --t0:#ece7dc; --t1:#d3d9cc; --t2:#bcc6cf; --t3:#cbb9a8; --t4:#7d6f61; --t5:#5d6b62; --t6:#4b5866; --t7:#33302c;
   --ink-dark:#1b1d20; --ink-light:#f3efe7;
 }
 html,body{margin:0; height:100%; background:var(--page)}
 body{display:flex; align-items:center; justify-content:center; overflow:hidden}
+.guides{position:relative; height:26px; margin-bottom:10px}
+.guides span{position:absolute; top:4px; width:16px; height:16px; border-radius:50%; background:var(--dot)}
 pre#grid{margin:0; font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-weight:700;
   font-size:15px; line-height:1.12; color:var(--ink-dark); user-select:none}
 .g0{background:var(--t0)} .g1{background:var(--t1)} .g2{background:var(--t2)} .g3{background:var(--t3)}
@@ -31,7 +33,10 @@ pre#grid{margin:0; font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,mono
 </style>
 </head>
 <body>
+<div class="inner">
+<div class="guides" id="guides" aria-hidden="true"><span></span><span></span></div>
 <pre id="grid" aria-label="The Road Not Taken by Robert Frost, written as a stereogram hiding a forking path, a signpost, a tree and a mountain"></pre>
+</div>
 <div class="corner">
   <button type="button" id="fullBtn" hidden>Full screen</button>
   <a href="https://github.com/VinceAtWorkingSoftware/road-not-taken-stereogram">Source on GitHub</a>
@@ -358,7 +363,7 @@ pre#grid{margin:0; font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,mono
   function draw(){
     cw = document.getElementById("probe").getBoundingClientRect().width / 40;
     cols = Math.max(PERIOD * 3, Math.min(260, Math.floor((window.innerWidth - 24) / cw)));
-    rows = Math.max(16, Math.floor((window.innerHeight - 56) / lh));
+    rows = Math.max(16, Math.floor((window.innerHeight - 56 - 36) / lh));
     poemLines = buildPoem();
     buildMask(); generate();
     var out = [];
@@ -368,6 +373,10 @@ pre#grid{margin:0; font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,mono
       out.push(line);
     }
     document.getElementById("grid").innerHTML = out.join("\n");
+    var gd = document.getElementById("guides"), gap = PERIOD * cw, GW = cols * cw;
+    gd.style.width = GW + "px";
+    gd.children[0].style.left = (GW / 2 - gap / 2 - 8) + "px";
+    gd.children[1].style.left = (GW / 2 + gap / 2 - 8) + "px";
   }
 
   var fullBtn = document.getElementById("fullBtn");
